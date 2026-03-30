@@ -728,6 +728,71 @@ func TestAccReservation_optionDataClientClassesUnsupported(t *testing.T) {
 	})
 }
 
+func TestAccReservation_import(t *testing.T) {
+	mac := "02:fa:c9:88:fa:69"
+	ip := "10.67.0.77"
+	resourceName := "kea_dhcp4_reservation.test"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationConfig_withClientClassesAndOptions(1, mac, ip),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccReservation_importInvalid(t *testing.T) {
+	mac := "02:ce:7e:2a:fc:ba"
+	ip := "10.67.0.57"
+	resourceName := "kea_dhcp4_reservation.test"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationConfig_withClientClassesAndOptions(1, mac, ip),
+			},
+			{
+				ResourceName:  resourceName,
+				ImportState:   true,
+				ImportStateId: "foo",
+				ExpectError:   regexp.MustCompile(`Error Parsing Reservation ID`),
+			},
+			{
+				ResourceName:  resourceName,
+				ImportState:   true,
+				ImportStateId: "foo/bar/baz",
+				ExpectError:   regexp.MustCompile(`Error Parsing Reservation ID`),
+			},
+			{
+				ResourceName:  resourceName,
+				ImportState:   true,
+				ImportStateId: "1/bar/baz",
+				ExpectError:   regexp.MustCompile(`Error Parsing Reservation ID`),
+			},
+			{
+				ResourceName:  resourceName,
+				ImportState:   true,
+				ImportStateId: "1/hw-address/baz",
+				ExpectError:   regexp.MustCompile(`Error Parsing Reservation ID`),
+			},
+			{
+				ResourceName:  resourceName,
+				ImportState:   true,
+				ImportStateId: "1/ip-address/10.67.0.57",
+				ExpectError:   regexp.MustCompile(`Error Parsing Reservation ID`),
+			},
+		},
+	})
+}
+
 func testAccCheckReservationExists(t *testing.T, query keaquery.ReservationQuery) func() {
 	return func() {
 		client := acctest.NewClient(t)

@@ -30,6 +30,7 @@ import (
 var _ resource.ResourceWithConfigure = (*ReservationResource)(nil)
 var _ resource.ResourceWithConfigValidators = (*ReservationResource)(nil)
 var _ resource.ResourceWithModifyPlan = (*ReservationResource)(nil)
+var _ resource.ResourceWithImportState = (*ReservationResource)(nil)
 
 type ReservationResource struct {
 	client *keadhcp4.Client
@@ -357,5 +358,17 @@ func (r *ReservationResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	if err := r.client.DeleteReservation(ctx, kea.OperationTargetDatabase, data.BuildQuery()); err != nil {
 		resp.Diagnostics.AddError("Error Deleting Reservation", err.Error())
+	}
+}
+
+func (r *ReservationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	fields, diag := ParseReservationID(req.ID)
+	if diag != nil {
+		resp.Diagnostics.Append(diag)
+		return
+	}
+
+	for k, v := range fields {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(k), v)...)
 	}
 }

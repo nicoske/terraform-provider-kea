@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/netip"
+	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework-nettypes/hwtypes"
@@ -342,4 +345,41 @@ func parseOptionPayload(data types.String, csvFormat types.Bool) (kea.OptionPayl
 		return nil, nil
 	}
 	return kea.NewOptionPayload(data.ValueString(), kea.CSVFormatOf(boolPointer(csvFormat)))
+}
+
+func ParseReservationID(id string) (map[string]any, diag.Diagnostic) {
+	parts := strings.SplitN(id, "/", 3)
+	if len(parts) != 3 {
+		return nil, diag.NewErrorDiagnostic("Error Parsing Reservation ID", "Reservation ID must be in the following format: <subnet id>/<identifier type>/<identifier>")
+	}
+	subnetID, err := strconv.ParseInt(parts[0], 10, 32)
+	if err != nil {
+		return nil, diag.NewErrorDiagnostic("Error Parsing Reservation ID", fmt.Sprintf("Subnet ID must be a 32 bit unsigned integer, got: %s", parts[0]))
+	}
+
+	result := make(map[string]any)
+
+	result["subnet_id"] = subnetID
+
+	switch parts[1] {
+	case "circuit-id":
+		result["circuit_id"] = parts[2]
+	case "client-id":
+		result["client_id"] = parts[2]
+	case "duid":
+		result["duid"] = parts[2]
+	case "flex-id":
+		result["flex_id"] = parts[2]
+	case "hw-address":
+		_, err := net.ParseMAC(parts[2])
+		if err != nil {
+			return nil, diag.NewErrorDiagnostic("Error Parsing Reservation ID", fmt.Sprintf("'hw-address' identifier type requires valid MAC address, got: %s", parts[2]))
+		}
+		result["hw_address"] = parts[2]
+	default:
+		return nil, diag.NewErrorDiagnostic("Error Parsing Reservation ID", fmt.Sprintf("Invalid identifier type: %s", parts[1]))
+	}
+
+	result["id"] = id
+	return result, nil
 }

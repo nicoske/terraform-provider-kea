@@ -433,6 +433,15 @@ func TestAccReservation_optionDataNormalization(t *testing.T) {
     csv_format = false
   }`},
 		},
+		"escaped_comma": {
+			mac: "02:11:22:33:88:0e",
+			ip:  "10.67.0.240",
+			blocks: []string{`option_data {
+    name       = "domain-name"
+    data       = "example\\,com"
+    csv_format = true
+  }`},
+		},
 		"duplicate_client_classes": {
 			mac: "02:11:22:33:88:03",
 			ip:  "10.67.0.222",

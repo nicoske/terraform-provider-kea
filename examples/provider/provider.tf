@@ -32,6 +32,16 @@ provider "kea" {
   }
 }
 
+# Send every change to both peers of a high availability pair
+provider "kea" {
+  dhcp4 = {
+    servers = [
+      { address = "http://192.0.2.1:8000" },
+      { address = "http://192.0.2.2:8000" },
+    ]
+  }
+}
+
 # Configure via environment variables
 # export KEA_DHCP4_ADDRESS="http://192.0.2.1:8000"
 # export KEA_DHCP4_HTTP_USERNAME="admin"

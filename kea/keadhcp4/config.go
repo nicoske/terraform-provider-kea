@@ -2,6 +2,7 @@ package keadhcp4
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/wfdewith/terraform-provider-kea/kea"
 )
@@ -30,4 +31,24 @@ func (c *Client) ConfigHash(ctx context.Context) (string, error) {
 	}
 
 	return result.Hash, nil
+}
+
+// ConfigHashes returns the SHA-256 hash of the running configuration of every
+// server behind a kea.MultiTransport, by server name. Any other transport is
+// one server with an empty name.
+func (c *Client) ConfigHashes(ctx context.Context) (map[string]string, error) {
+	servers := []kea.Server{{Transport: c.transport}}
+	if multi, ok := c.transport.(*kea.MultiTransport); ok {
+		servers = multi.Servers
+	}
+
+	hashes := make(map[string]string, len(servers))
+	for _, server := range servers {
+		hash, err := NewClient(server).ConfigHash(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", server.Name, err)
+		}
+		hashes[server.Name] = hash
+	}
+	return hashes, nil
 }

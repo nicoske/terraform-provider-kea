@@ -24,6 +24,14 @@ provider "kea" {
   }
 }
 
+# Save every change to the Kea configuration file
+provider "kea" {
+  dhcp4 = {
+    address      = "http://192.0.2.1:8000"
+    config_write = true
+  }
+}
+
 # Configure via environment variables
 # export KEA_DHCP4_ADDRESS="http://192.0.2.1:8000"
 # export KEA_DHCP4_HTTP_USERNAME="admin"

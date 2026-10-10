@@ -40,13 +40,9 @@ func (c *Client) GetSubnet(ctx context.Context, query keaquery.SubnetQuery) (*Su
 }
 
 func (c *Client) AddSubnet(ctx context.Context, subnet Subnet) error {
-	err := kea.Exec(ctx, c.transport, "subnet4-add", struct {
+	return c.exec(ctx, "subnet added", "subnet4-add", struct {
 		Subnet4 []Subnet `json:"subnet4"`
 	}{[]Subnet{subnet}})
-	if err != nil {
-		return err
-	}
-	return c.persist(ctx, "subnet added")
 }
 
 // UpdateSubnet replaces the subnet with the same ID, and adds it to the
@@ -55,22 +51,16 @@ func (c *Client) UpdateSubnet(ctx context.Context, subnet Subnet) error {
 	arguments := struct {
 		Subnet4 []Subnet `json:"subnet4"`
 	}{[]Subnet{subnet}}
-	err := c.upsert(ctx, "subnet4-add", "subnet4-update", arguments, func(server *Client) (bool, error) {
-		found, err := server.GetSubnet(ctx, keaquery.SubnetByID(subnet.ID))
-		return found != nil, err
+	return c.mutate(ctx, "subnet updated", func() error {
+		return c.upsert(ctx, "subnet4-add", "subnet4-update", arguments, func(server *Client) (bool, error) {
+			found, err := server.GetSubnet(ctx, keaquery.SubnetByID(subnet.ID))
+			return found != nil, err
+		})
 	})
-	if err != nil {
-		return err
-	}
-	return c.persist(ctx, "subnet updated")
 }
 
 func (c *Client) DeleteSubnet(ctx context.Context, id uint32) error {
-	err := kea.Exec(ctx, c.transport, "subnet4-del", struct {
+	return c.exec(ctx, "subnet deleted", "subnet4-del", struct {
 		ID uint32 `json:"id"`
 	}{id})
-	if err != nil {
-		return err
-	}
-	return c.persist(ctx, "subnet deleted")
 }

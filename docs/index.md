@@ -80,7 +80,7 @@ provider "kea" {
 Optional:
 
 - `address` (String) Control channel address: `unix:///path/to/socket` or `http(s)://host:port`. Falls back to `KEA_DHCP4_ADDRESS` environment variable.
-- `config_write` (Boolean) Send `config-write` after every change so that Kea saves its running configuration to disk and keeps it across restarts. Defaults to `false`. Falls back to `KEA_DHCP4_CONFIG_WRITE` environment variable.
+- `config_write` (Boolean) Send `config-write` after every change so that Kea saves its running configuration to disk and keeps it across restarts. With `servers`, a change that stops at a failing server is still written on the servers that took it. Defaults to `false`. Falls back to `KEA_DHCP4_CONFIG_WRITE` environment variable.
 - `config_write_filename` (String) File that `config-write` writes to, instead of the configuration file Kea was started with. Kea only accepts files in the directory of its startup configuration file. Only used when `config_write` is `true`. Falls back to `KEA_DHCP4_CONFIG_WRITE_FILENAME` environment variable.
 - `http_password` (String, Sensitive) Password for HTTP basic authentication. Falls back to `KEA_DHCP4_HTTP_PASSWORD` environment variable.
 - `http_username` (String) Username for HTTP basic authentication. Falls back to `KEA_DHCP4_HTTP_USERNAME` environment variable.

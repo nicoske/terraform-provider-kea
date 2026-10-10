@@ -47,13 +47,9 @@ func (c *Client) GetClientClass(ctx context.Context, name string) (*ClientClass,
 }
 
 func (c *Client) AddClientClass(ctx context.Context, class ClientClass) error {
-	err := kea.Exec(ctx, c.transport, "class-add", struct {
+	return c.exec(ctx, "client class added", "class-add", struct {
 		ClientClasses []ClientClass `json:"client-classes"`
 	}{[]ClientClass{class}})
-	if err != nil {
-		return err
-	}
-	return c.persist(ctx, "client class added")
 }
 
 // UpdateClientClass replaces the client class with the same name, and adds it
@@ -62,22 +58,16 @@ func (c *Client) UpdateClientClass(ctx context.Context, class ClientClass) error
 	arguments := struct {
 		ClientClasses []ClientClass `json:"client-classes"`
 	}{[]ClientClass{class}}
-	err := c.upsert(ctx, "class-add", "class-update", arguments, func(server *Client) (bool, error) {
-		found, err := server.GetClientClass(ctx, class.Name)
-		return found != nil, err
+	return c.mutate(ctx, "client class updated", func() error {
+		return c.upsert(ctx, "class-add", "class-update", arguments, func(server *Client) (bool, error) {
+			found, err := server.GetClientClass(ctx, class.Name)
+			return found != nil, err
+		})
 	})
-	if err != nil {
-		return err
-	}
-	return c.persist(ctx, "client class updated")
 }
 
 func (c *Client) DeleteClientClass(ctx context.Context, name string) error {
-	err := kea.Exec(ctx, c.transport, "class-del", struct {
+	return c.exec(ctx, "client class deleted", "class-del", struct {
 		Name string `json:"name"`
 	}{name})
-	if err != nil {
-		return err
-	}
-	return c.persist(ctx, "client class deleted")
 }

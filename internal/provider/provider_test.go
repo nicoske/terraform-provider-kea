@@ -253,6 +253,56 @@ func TestAccProvider_configWriteMemory(t *testing.T) {
 	})
 }
 
+func TestAccProvider_configWritePartialWrite(t *testing.T) {
+	configFile := testAccConfigFile(t)
+	mac := "02:11:22:33:99:05"
+	first := os.Getenv("KEA_DHCP4_ADDRESS")
+	unreachable := "http://127.0.0.1:1"
+	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
+	t.Cleanup(func() {
+		_ = keadhcp4.NewClient(&kea.HTTPTransport{Endpoint: first}, keadhcp4.WithConfigWrite("")).
+			DeleteReservation(context.Background(), kea.OperationTargetMemory, query)
+	})
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "kea" {
+  dhcp4 = {
+    servers      = [{ address = %q }, { address = %q }]
+    config_write = true
+  }
+}
+
+resource "kea_dhcp4_reservation" "test" {
+  subnet_id        = 1
+  hw_address       = %q
+  ip_address       = "10.67.0.245"
+  operation_target = "memory"
+}
+`, first, unreachable, mac),
+				ExpectError: regexp.MustCompile(fmt.Sprintf(`reservation-add\s+succeeded\s+on\s+%s\s+and\s+failed\s+on\s+%s(.|\s)+configuration\s+written\s+on\s+%s`,
+					regexp.QuoteMeta(first), regexp.QuoteMeta(unreachable), regexp.QuoteMeta(first))),
+			},
+			{
+				PreConfig: func() {
+					found, err := testAccConfigFileHasReservation(configFile, mac)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !found {
+						t.Fatalf("reservation %s not in %s", mac, configFile)
+					}
+				},
+				Config: acctest.ProviderConfig(),
+			},
+		},
+	})
+}
+
 func TestAccProvider_configWriteFilename(t *testing.T) {
 	configFile := filepath.Join(filepath.Dir(testAccConfigFile(t)), "config-write-filename.json")
 	if err := os.Remove(configFile); err != nil && !os.IsNotExist(err) {

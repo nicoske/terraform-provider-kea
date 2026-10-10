@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -25,6 +26,19 @@ type OptionDataModel struct {
 	AlwaysSend    types.Bool   `tfsdk:"always_send"`
 	NeverSend     types.Bool   `tfsdk:"never_send"`
 	ClientClasses types.Set    `tfsdk:"client_classes"`
+}
+
+var optionDataObjectType = types.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"name":           types.StringType,
+		"code":           types.Int32Type,
+		"space":          types.StringType,
+		"data":           types.StringType,
+		"csv_format":     types.BoolType,
+		"always_send":    types.BoolType,
+		"never_send":     types.BoolType,
+		"client_classes": types.SetType{ElemType: types.StringType},
+	},
 }
 
 func optionDataBlock(description string) schema.SetNestedBlock {

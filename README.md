@@ -12,6 +12,7 @@ programmatically without requiring server restarts.
 Currently supported:
 - DHCPv4 host reservations (resource and data source)
 - DHCPv4 client classes (resource and data source)
+- Running configuration hash per server (data source)
 
 ## Requirements
 
@@ -133,6 +134,27 @@ provider "kea" {
   }
 }
 ```
+
+### Several servers
+
+Kea high availability peers do not replicate configuration changes, so each
+peer must receive every change. List the peers in `servers` to send every
+change to each of them in order:
+
+```terraform
+provider "kea" {
+  dhcp4 = {
+    servers = [
+      { address = "http://kea-1:8000" },
+      { address = "http://kea-2:8000" },
+    ]
+  }
+}
+```
+
+A change stops at the first server that fails, and the error names the
+servers that already applied it. Reads ask every server and warn when one
+answers differently from the first; `strict_sync = true` makes that an error.
 
 Create a DHCP reservation:
 

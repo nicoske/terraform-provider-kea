@@ -266,6 +266,9 @@ func (r *ReservationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
+	ctx, reportDrift := driftWarnings(ctx, &resp.Diagnostics, &data.ID)
+	defer reportDrift()
+
 	// null in state written by provider versions without operation_target
 	if data.OperationTarget.IsNull() {
 		data.OperationTarget = types.StringValue(string(kea.OperationTargetDatabase))

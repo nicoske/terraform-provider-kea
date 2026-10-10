@@ -166,6 +166,9 @@ func (d *ReservationDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
+	ctx, reportDrift := driftWarnings(ctx, &resp.Diagnostics, &data.ID)
+	defer reportDrift()
+
 	target := data.Target(kea.OperationTargetAll)
 	data.OperationTarget = types.StringValue(string(target))
 

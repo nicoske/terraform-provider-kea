@@ -81,7 +81,10 @@ func roundTrip(ctx context.Context, trans Transport, req CommandRequest, resp *C
 	if err != nil {
 		return err
 	}
+	return resultError(resp)
+}
 
+func resultError(resp *CommandResponse) error {
 	switch resp.Result {
 	case ResultSuccess:
 		return nil

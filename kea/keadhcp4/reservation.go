@@ -30,17 +30,28 @@ func (c *Client) GetReservation(ctx context.Context, target kea.OperationTarget,
 }
 
 func (c *Client) AddReservation(ctx context.Context, target kea.OperationTarget, reservation Reservation) error {
-	return kea.Exec(ctx, c.transport, "reservation-add", kea.WithTarget(target, struct {
+	err := kea.Exec(ctx, c.transport, "reservation-add", kea.WithTarget(target, struct {
 		Reservation Reservation `json:"reservation"`
 	}{reservation}))
+	if err != nil {
+		return err
+	}
+	return c.persist(ctx, "reservation added")
 }
 
 func (c *Client) UpdateReservation(ctx context.Context, target kea.OperationTarget, reservation Reservation) error {
-	return kea.Exec(ctx, c.transport, "reservation-update", kea.WithTarget(target, struct {
+	err := kea.Exec(ctx, c.transport, "reservation-update", kea.WithTarget(target, struct {
 		Reservation Reservation `json:"reservation"`
 	}{reservation}))
+	if err != nil {
+		return err
+	}
+	return c.persist(ctx, "reservation updated")
 }
 
 func (c *Client) DeleteReservation(ctx context.Context, target kea.OperationTarget, query keaquery.ReservationQuery) error {
-	return kea.Exec(ctx, c.transport, "reservation-del", kea.WithTarget(target, query))
+	if err := kea.Exec(ctx, c.transport, "reservation-del", kea.WithTarget(target, query)); err != nil {
+		return err
+	}
+	return c.persist(ctx, "reservation deleted")
 }

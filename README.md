@@ -26,6 +26,8 @@ channel. You must configure either:
 - **UNIX domain socket** - For local connections to the server
 - **HTTP control socket** - For remote connections (requires the `http` hook
   library)
+- **HTTPS control socket** - For remote connections over TLS, optionally with
+  client certificates (`cert-required`)
 
 **Important:** This provider does **not** work with the Kea Control Agent
 (`kea-ctrl-agent`). The Control Agent is deprecated in favor of direct HTTP
@@ -76,6 +78,19 @@ Configure the provider to connect to your Kea server via HTTP:
 provider "kea" {
   dhcp4 = {
     address = "http://kea-server:8000"
+  }
+}
+```
+
+Or via HTTPS with a private CA and a client certificate for mutual TLS:
+
+```terraform
+provider "kea" {
+  dhcp4 = {
+    address              = "https://kea-server:8000"
+    tls_ca_file          = "/etc/terraform/kea/ca.pem"
+    tls_client_cert_file = "/etc/terraform/kea/client.pem"
+    tls_client_key_file  = "/etc/terraform/kea/client-key.pem"
   }
 }
 ```

@@ -21,6 +21,16 @@ provider "kea" {
   }
 }
 
+# Configure via HTTPS endpoint with mutual TLS
+provider "kea" {
+  dhcp4 = {
+    address              = "https://kea.example.com:8000"
+    tls_ca_file          = "/etc/terraform/kea/ca.pem"
+    tls_client_cert_file = "/etc/terraform/kea/client.pem"
+    tls_client_key_file  = "/etc/terraform/kea/client-key.pem"
+  }
+}
+
 # Configure via UNIX socket
 provider "kea" {
   dhcp4 = {
@@ -32,6 +42,9 @@ provider "kea" {
 # export KEA_DHCP4_ADDRESS="http://192.0.2.1:8000"
 # export KEA_DHCP4_HTTP_USERNAME="admin"
 # export KEA_DHCP4_HTTP_PASSWORD="secret"
+# export KEA_DHCP4_TLS_CA_FILE="/etc/terraform/kea/ca.pem"
+# export KEA_DHCP4_TLS_CLIENT_CERT_FILE="/etc/terraform/kea/client.pem"
+# export KEA_DHCP4_TLS_CLIENT_KEY_FILE="/etc/terraform/kea/client-key.pem"
 provider "kea" {
 }
 ```
@@ -51,3 +64,7 @@ Optional:
 - `address` (String) Control channel address: `unix:///path/to/socket` or `http(s)://host:port`. Falls back to `KEA_DHCP4_ADDRESS` environment variable.
 - `http_password` (String, Sensitive) Password for HTTP basic authentication. Falls back to `KEA_DHCP4_HTTP_PASSWORD` environment variable.
 - `http_username` (String) Username for HTTP basic authentication. Falls back to `KEA_DHCP4_HTTP_USERNAME` environment variable.
+- `tls_ca_file` (String) Path to a PEM CA bundle used to verify the server certificate of an `https` address instead of the system roots. Falls back to `KEA_DHCP4_TLS_CA_FILE` environment variable.
+- `tls_client_cert_file` (String) Path to a PEM client certificate for mutual TLS. Requires `tls_client_key_file`. Falls back to `KEA_DHCP4_TLS_CLIENT_CERT_FILE` environment variable.
+- `tls_client_key_file` (String) Path to the PEM private key of `tls_client_cert_file`. Falls back to `KEA_DHCP4_TLS_CLIENT_KEY_FILE` environment variable.
+- `tls_server_name` (String) Server name used to verify the server certificate, when it differs from the host in `address`. Falls back to `KEA_DHCP4_TLS_SERVER_NAME` environment variable.

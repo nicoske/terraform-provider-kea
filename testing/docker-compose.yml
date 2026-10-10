@@ -55,3 +55,36 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 60s
+
+  kea-dhcp4-2:
+    image: docker.cloudsmith.io/isc/docker/kea-dhcp4:${KEA_VERSION}
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+    ports:
+      - 8010:8000
+      - 8011:8001
+      - 8012:8002
+    volumes:
+      - ./kea-dhcp4-2.conf:/usr/local/etc/kea-dhcp4.conf:ro
+      - ./config-2:/etc/kea
+      - ./certs:/etc/kea/certs:ro
+      - ./init-network.sh:/usr/local/bin/init-network.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/init-network.sh"]
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --tries=1
+        - '--post-data={"command":"list-commands"}'
+        - "--header=Content-Type: application/json"
+        - -O
+        - /dev/null
+        - http://127.0.0.1:8000/
+      interval: 30s
+      timeout: 5s
+      start_period: 60s

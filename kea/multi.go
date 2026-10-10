@@ -146,6 +146,18 @@ func (t *MultiTransport) Send(ctx context.Context, req CommandRequest, resp *Com
 	return t.write(ctx, req, resp)
 }
 
+// Subset returns a MultiTransport to the servers named in names, in the order
+// of Servers, with the same Strict setting.
+func (t *MultiTransport) Subset(names ...string) *MultiTransport {
+	subset := &MultiTransport{Strict: t.Strict}
+	for _, server := range t.Servers {
+		if slices.Contains(names, server.Name) {
+			subset.Servers = append(subset.Servers, server)
+		}
+	}
+	return subset
+}
+
 func (t *MultiTransport) write(ctx context.Context, req CommandRequest, resp *CommandResponse) error {
 	var done []string
 	for _, server := range t.Servers {

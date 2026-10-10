@@ -119,7 +119,8 @@ func (p *KeaProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 					"config_write": schema.BoolAttribute{
 						Optional: true,
 						Description: "Send `config-write` after every change so that Kea saves its running configuration to disk " +
-							"and keeps it across restarts. Defaults to `false`. Falls back to `KEA_DHCP4_CONFIG_WRITE` environment variable.",
+							"and keeps it across restarts. With `servers`, a change that stops at a failing server is still written on the servers that took it. " +
+							"Defaults to `false`. Falls back to `KEA_DHCP4_CONFIG_WRITE` environment variable.",
 					},
 					"config_write_filename": schema.StringAttribute{
 						Optional: true,

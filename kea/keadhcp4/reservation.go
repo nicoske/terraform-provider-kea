@@ -31,13 +31,9 @@ func (c *Client) GetReservation(ctx context.Context, target kea.OperationTarget,
 }
 
 func (c *Client) AddReservation(ctx context.Context, target kea.OperationTarget, reservation Reservation) error {
-	err := kea.Exec(ctx, c.transport, "reservation-add", kea.WithTarget(target, struct {
+	return c.exec(ctx, "reservation added", "reservation-add", kea.WithTarget(target, struct {
 		Reservation Reservation `json:"reservation"`
 	}{reservation}))
-	if err != nil {
-		return err
-	}
-	return c.persist(ctx, "reservation added")
 }
 
 // UpdateReservation replaces the reservation with the same subnet and
@@ -46,21 +42,16 @@ func (c *Client) UpdateReservation(ctx context.Context, target kea.OperationTarg
 	arguments := kea.WithTarget(target, struct {
 		Reservation Reservation `json:"reservation"`
 	}{reservation})
-	err := c.upsert(ctx, "reservation-add", "reservation-update", arguments, func(server *Client) (bool, error) {
-		found, err := server.GetReservation(ctx, target, reservation.query())
-		return found != nil, err
+	return c.mutate(ctx, "reservation updated", func() error {
+		return c.upsert(ctx, "reservation-add", "reservation-update", arguments, func(server *Client) (bool, error) {
+			found, err := server.GetReservation(ctx, target, reservation.query())
+			return found != nil, err
+		})
 	})
-	if err != nil {
-		return err
-	}
-	return c.persist(ctx, "reservation updated")
 }
 
 func (c *Client) DeleteReservation(ctx context.Context, target kea.OperationTarget, query keaquery.ReservationQuery) error {
-	if err := kea.Exec(ctx, c.transport, "reservation-del", kea.WithTarget(target, query)); err != nil {
-		return err
-	}
-	return c.persist(ctx, "reservation deleted")
+	return c.exec(ctx, "reservation deleted", "reservation-del", kea.WithTarget(target, query))
 }
 
 // query identifies the reservation by the first identifier it holds, or by

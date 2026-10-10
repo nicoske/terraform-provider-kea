@@ -2,7 +2,9 @@ package keadhcp4
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/wfdewith/terraform-provider-kea/kea"
 )
@@ -34,7 +36,19 @@ func NewClient(transport kea.Transport, opts ...ClientOption) *Client {
 	return c
 }
 
-func (c *Client) persist(ctx context.Context, done string) error {
+// mutate runs send, which sends a command that changes the configuration, and
+// then config-write when it is enabled. When send stops part way through the
+// servers of a kea.MultiTransport, config-write still goes to the servers that
+// took the change, so that they keep it across a restart.
+func (c *Client) mutate(ctx context.Context, done string, send func() error) error {
+	err := send()
+	var partial *kea.PartialWriteError
+	if errors.As(err, &partial) {
+		return c.persistPartial(ctx, err, partial.Done)
+	}
+	if err != nil {
+		return err
+	}
 	if !c.configWrite {
 		return nil
 	}
@@ -42,6 +56,25 @@ func (c *Client) persist(ctx context.Context, done string) error {
 		return fmt.Errorf("%s but config-write failed: %w", done, err)
 	}
 	return nil
+}
+
+func (c *Client) persistPartial(ctx context.Context, err error, done []string) error {
+	multi, ok := c.transport.(*kea.MultiTransport)
+	if !c.configWrite || !ok || len(done) == 0 {
+		return err
+	}
+	names := strings.Join(done, ", ")
+	if werr := NewClient(multi.Subset(done...)).ConfigWrite(ctx, c.configWriteFilename); werr != nil {
+		return fmt.Errorf("%w; config-write on %s failed: %w", err, names, werr)
+	}
+	return fmt.Errorf("%w; configuration written on %s", err, names)
+}
+
+// exec sends a command that changes the configuration through mutate.
+func (c *Client) exec(ctx context.Context, done, command string, arguments any) error {
+	return c.mutate(ctx, done, func() error {
+		return kea.Exec(ctx, c.transport, command, arguments)
+	})
 }
 
 // servers returns the servers behind a kea.MultiTransport. Any other

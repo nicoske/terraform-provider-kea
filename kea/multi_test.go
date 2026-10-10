@@ -334,6 +334,18 @@ func TestMultiTransport_readError(t *testing.T) {
 	}
 }
 
+func TestMultiTransport_subset(t *testing.T) {
+	a, b, c := ok("config-write"), ok("config-write"), ok("config-write")
+
+	err := kea.Exec(context.Background(), multi(a, b, c).Subset("c", "a"), "config-write", struct{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(a.commands) != 1 || len(b.commands) != 0 || len(c.commands) != 1 {
+		t.Fatalf("commands sent: a %v, b %v, c %v", a.commands, b.commands, c.commands)
+	}
+}
+
 func TestMultiTransport_singleServer(t *testing.T) {
 	a := &fakeServer{answers: map[string]kea.CommandResponse{
 		"reservation-add": answer(kea.ResultError, "duplicate", ""),

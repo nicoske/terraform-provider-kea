@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/wfdewith/terraform-provider-kea/internal/acctest"
 	"github.com/wfdewith/terraform-provider-kea/kea/keaquery"
 )
@@ -228,6 +230,8 @@ func TestAccSubnet_update(t *testing.T) {
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+						plancheck.ExpectUnknownValue(resourceName, tfjsonpath.New("min_valid_lifetime")),
+						plancheck.ExpectUnknownValue(resourceName, tfjsonpath.New("max_valid_lifetime")),
 					},
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -255,6 +259,12 @@ func TestAccSubnet_update(t *testing.T) {
     pool = "10.67.14.100 - 10.67.14.200"
   }
 `),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectUnknownValue(resourceName, tfjsonpath.New("valid_lifetime")),
+						plancheck.ExpectUnknownValue(resourceName, tfjsonpath.New("renew_timer")),
+					},
+				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(resourceName, "valid_lifetime", "7200"),
 					resource.TestCheckNoResourceAttr(resourceName, "renew_timer"),
@@ -265,8 +275,82 @@ func TestAccSubnet_update(t *testing.T) {
 				),
 				PostApplyFunc: testAccCheckSubnetExists(t, 104),
 			},
+			{
+				Config: testAccSubnetConfig_withBlocks(104, "10.67.14.0/24", `
+  boot_file_name = "pxelinux.1"
+
+  pools {
+    pool = "10.67.14.100 - 10.67.14.200"
+  }
+`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+						expectKnownTimers(resourceName),
+						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New("valid_lifetime"), knownvalue.Int64Exact(7200)),
+						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New("renew_timer"), knownvalue.Null()),
+					},
+				},
+			},
+			{
+				Config: testAccSubnetConfig_withBlocks(104, "10.67.14.0/24", `
+  boot_file_name = "pxelinux.1"
+  valid_lifetime = 7200
+
+  pools {
+    pool = "10.67.14.100 - 10.67.14.200"
+  }
+`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				Config: testAccSubnetConfig_withBlocks(104, "10.67.14.0/24", `
+  boot_file_name = "pxelinux.2"
+  valid_lifetime = 7200
+
+  pools {
+    pool = "10.67.14.100 - 10.67.14.200"
+  }
+`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+						expectKnownTimers(resourceName),
+					},
+				},
+			},
 		},
 	})
+}
+
+// expectKnownTimers expects every subnet timer to be known in the plan.
+func expectKnownTimers(resourceName string) plancheck.PlanCheck {
+	return knownTimersCheck{resourceName}
+}
+
+type knownTimersCheck struct {
+	resourceName string
+}
+
+func (c knownTimersCheck) CheckPlan(ctx context.Context, req plancheck.CheckPlanRequest, resp *plancheck.CheckPlanResponse) {
+	for _, rc := range req.Plan.ResourceChanges {
+		if rc.Address != c.resourceName {
+			continue
+		}
+		unknown, _ := rc.Change.AfterUnknown.(map[string]any)
+		for _, name := range []string{"valid_lifetime", "min_valid_lifetime", "max_valid_lifetime", "renew_timer", "rebind_timer"} {
+			if unknown[name] == true {
+				resp.Error = fmt.Errorf("%s.%s is unknown", c.resourceName, name)
+				return
+			}
+		}
+		return
+	}
+	resp.Error = fmt.Errorf("%s not found in plan", c.resourceName)
 }
 
 func TestAccSubnet_destroy(t *testing.T) {

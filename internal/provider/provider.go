@@ -131,7 +131,7 @@ func (p *KeaProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 						Optional: true,
 						Description: "Several Kea DHCPv4 servers that must hold the same configuration, such as the peers of a high availability pair, " +
 							"which do not replicate configuration changes. Every change is sent to each server in order and stops at the first failure; " +
-							"reads compare the answers of all servers and use the first server's. " +
+							"reads compare the answers of all servers and use the answer of the first server that answers, so a read only fails when no server answers. " +
 							"Conflicts with `address`, `http_username`, `http_password` and the `tls_*` attributes, and their environment variables are not used.",
 						NestedObject: schema.NestedAttributeObject{
 							Attributes: map[string]schema.Attribute{
@@ -184,7 +184,7 @@ func (p *KeaProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 					},
 					"strict_sync": schema.BoolAttribute{
 						Optional: true,
-						Description: "Fail reads when a server in `servers` answers differently from the first one, instead of a warning. " +
+						Description: "Fail reads when a server in `servers` answers differently from the others or does not answer, instead of a warning. " +
 							"Defaults to `false`. Falls back to `KEA_DHCP4_STRICT_SYNC` environment variable.",
 					},
 				},

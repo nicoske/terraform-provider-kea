@@ -3,7 +3,9 @@ package kea
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"reflect"
 	"slices"
 	"strings"
@@ -23,10 +25,11 @@ type Server struct {
 // not replicate configuration changes to each other.
 //
 // A write goes to every server in order and stops at the first failure with a
-// *PartialWriteError. A read goes to every server too and returns the first
-// server's answer; a server that answers differently is reported to the
-// function set with WithDriftReporter, or fails the read with a *DriftError
-// when Strict is set. A single server is used as is.
+// *PartialWriteError. A read goes to every server too and returns the answer
+// of the first server that answers. A server that answers differently, or
+// that cannot be reached, is reported to the function set with
+// WithDriftReporter, or fails the read with a *DriftError when Strict is set.
+// A read fails when no server answers. A single server is used as is.
 type MultiTransport struct {
 	Servers []Server
 	Strict  bool
@@ -53,28 +56,62 @@ func (e *PartialWriteError) Unwrap() error {
 	return e.Err
 }
 
-// Drift is a server whose answer to a read command differs from the first
-// server's answer.
+// Drift is a server whose answer to a read command differs from the answer
+// used, or a server that could not be reached when Err is set.
 type Drift struct {
 	Server  string
 	Command string
+	Err     error
+}
+
+// Unavailable reports whether the server could not be reached.
+func (d Drift) Unavailable() bool {
+	return d.Err != nil
 }
 
 // DriftError is returned by a MultiTransport with Strict set when a server
-// answers a read command differently from the first server.
+// answers a read command differently from the answer used, or cannot be
+// reached.
 type DriftError struct {
 	Drift
 }
 
 func (e *DriftError) Error() string {
+	if e.Unavailable() {
+		return fmt.Sprintf("servers out of sync: %s did not answer %s: %v", e.Server, e.Command, e.Err)
+	}
 	return fmt.Sprintf("servers out of sync: %s answers differently to %s", e.Server, e.Command)
+}
+
+func (e *DriftError) Unwrap() error {
+	return e.Err
+}
+
+// UnavailableError is returned when no server answers a read command. Errs
+// holds the error of each server in Servers.
+type UnavailableError struct {
+	Command string
+	Servers []string
+	Errs    []error
+}
+
+func (e *UnavailableError) Error() string {
+	failures := make([]string, len(e.Servers))
+	for i, server := range e.Servers {
+		failures[i] = fmt.Sprintf("%s: %v", server, e.Errs[i])
+	}
+	return fmt.Sprintf("%s failed on every server: %s", e.Command, strings.Join(failures, "; "))
+}
+
+func (e *UnavailableError) Unwrap() []error {
+	return e.Errs
 }
 
 type driftReporterKey struct{}
 
 // WithDriftReporter returns a context that makes a MultiTransport call report
-// for every server that answers a read command differently from the first
-// server.
+// for every server that answers a read command differently from the answer
+// used, or that cannot be reached.
 func WithDriftReporter(ctx context.Context, report func(Drift)) context.Context {
 	return context.WithValue(ctx, driftReporterKey{}, report)
 }
@@ -129,19 +166,28 @@ func (t *MultiTransport) write(ctx context.Context, req CommandRequest, resp *Co
 }
 
 func (t *MultiTransport) read(ctx context.Context, req CommandRequest, resp *CommandResponse) error {
-	first, err := t.Servers[0].sendRead(ctx, req)
-	if err != nil {
-		return err
-	}
-	*resp = first
-
 	report, _ := ctx.Value(driftReporterKey{}).(func(Drift))
-	for _, server := range t.Servers[1:] {
+	var first *CommandResponse
+	var unavailable UnavailableError
+	for _, server := range t.Servers {
 		r, err := server.sendRead(ctx, req)
+		if isTransportError(err) {
+			drift := Drift{Server: server.Name, Command: req.Command, Err: err}
+			if t.Strict {
+				return &DriftError{drift}
+			}
+			unavailable.Servers = append(unavailable.Servers, server.Name)
+			unavailable.Errs = append(unavailable.Errs, err)
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("%s: %w", server.Name, err)
 		}
-		same, err := sameAnswer(first, r)
+		if first == nil {
+			first = &r
+			continue
+		}
+		same, err := sameAnswer(*first, r)
 		if err != nil {
 			return fmt.Errorf("%s: %w", server.Name, err)
 		}
@@ -156,7 +202,25 @@ func (t *MultiTransport) read(ctx context.Context, req CommandRequest, resp *Com
 			report(drift)
 		}
 	}
+
+	if first == nil {
+		unavailable.Command = req.Command
+		return &unavailable
+	}
+	*resp = *first
+	if report != nil {
+		for i, server := range unavailable.Servers {
+			report(Drift{Server: server, Command: req.Command, Err: unavailable.Errs[i]})
+		}
+	}
 	return nil
+}
+
+// isTransportError reports whether err means that the server could not be
+// reached, as opposed to an answer that could not be used.
+func isTransportError(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr)
 }
 
 func (s Server) sendRead(ctx context.Context, req CommandRequest) (CommandResponse, error) {

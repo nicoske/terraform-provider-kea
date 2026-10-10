@@ -15,6 +15,12 @@ services:
       timeout: 5s
       start_period: 60s
 
+  certs:
+    image: alpine:3.22
+    volumes:
+      - ./:/testing
+    entrypoint: ["/bin/sh", "-c", "apk add --no-cache openssl >/dev/null && sh /testing/gen-certs.sh /testing/certs"]
+
   kea-dhcp4:
     image: docker.cloudsmith.io/isc/docker/kea-dhcp4:${KEA_VERSION}
     restart: unless-stopped
@@ -23,11 +29,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      certs:
+        condition: service_completed_successfully
     ports:
       - 8000:8000
       - 8001:8001
+      - 8002:8002
     volumes:
       - ./kea-dhcp4.conf:/etc/kea/kea-dhcp4.conf:ro
+      - ./certs:/etc/kea/certs:ro
       - ./init-network.sh:/usr/local/bin/init-network.sh:ro
     entrypoint: ["/bin/sh", "/usr/local/bin/init-network.sh"]
     healthcheck:

@@ -47,6 +47,7 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 			"Host reservations bind specific IP addresses and DHCP options to clients identified by MAC address, client ID, or other identifiers.\n\n" +
 			"**Important:** Requires the `host_cmds` hook library, and a hosts database backend unless `operation_target` is `memory`.",
 		Attributes: map[string]schema.Attribute{
+			"in_sync": inSyncAttribute(),
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "Unique identifier for the reservation in the format `{subnet_id}/{identifier_type}/{identifier}`.",
@@ -225,7 +226,7 @@ func (r *ReservationResource) ImportState(ctx context.Context, req resource.Impo
 }
 
 func (r *ReservationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data ReservationModel
+	var data ReservationResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -255,11 +256,12 @@ func (r *ReservationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	resp.Diagnostics.Append(data.FromAPI(ctx, created)...)
+	data.InSync = types.BoolValue(true)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *ReservationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data ReservationModel
+	var data ReservationResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -267,7 +269,6 @@ func (r *ReservationResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	ctx, reportDrift := driftWarnings(ctx, &resp.Diagnostics, &data.ID)
-	defer reportDrift()
 
 	// null in state written by provider versions without operation_target
 	if data.OperationTarget.IsNull() {
@@ -275,6 +276,7 @@ func (r *ReservationResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	reservation, err := r.client.GetReservation(ctx, data.Target(kea.OperationTargetDatabase), data.BuildQuery())
+	data.InSync = types.BoolValue(reportDrift())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Reservation", err.Error())
 		return
@@ -290,7 +292,7 @@ func (r *ReservationResource) Read(ctx context.Context, req resource.ReadRequest
 }
 
 func (r *ReservationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data ReservationModel
+	var data ReservationResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -320,11 +322,12 @@ func (r *ReservationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	resp.Diagnostics.Append(data.FromAPI(ctx, updated)...)
+	data.InSync = types.BoolValue(true)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *ReservationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data ReservationModel
+	var data ReservationResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {

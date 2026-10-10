@@ -56,10 +56,16 @@ func (c *Client) AddClientClass(ctx context.Context, class ClientClass) error {
 	return c.persist(ctx, "client class added")
 }
 
+// UpdateClientClass replaces the client class with the same name, and adds it
+// to the servers that do not hold it.
 func (c *Client) UpdateClientClass(ctx context.Context, class ClientClass) error {
-	err := kea.Exec(ctx, c.transport, "class-update", struct {
+	arguments := struct {
 		ClientClasses []ClientClass `json:"client-classes"`
-	}{[]ClientClass{class}})
+	}{[]ClientClass{class}}
+	err := c.upsert(ctx, "class-add", "class-update", arguments, func(server *Client) (bool, error) {
+		found, err := server.GetClientClass(ctx, class.Name)
+		return found != nil, err
+	})
 	if err != nil {
 		return err
 	}

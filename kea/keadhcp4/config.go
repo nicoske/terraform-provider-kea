@@ -37,11 +37,7 @@ func (c *Client) ConfigHash(ctx context.Context) (string, error) {
 // server behind a kea.MultiTransport, by server name. Any other transport is
 // one server with an empty name.
 func (c *Client) ConfigHashes(ctx context.Context) (map[string]string, error) {
-	servers := []kea.Server{{Transport: c.transport}}
-	if multi, ok := c.transport.(*kea.MultiTransport); ok {
-		servers = multi.Servers
-	}
-
+	servers := c.servers()
 	hashes := make(map[string]string, len(servers))
 	for _, server := range servers {
 		hash, err := NewClient(server).ConfigHash(ctx)

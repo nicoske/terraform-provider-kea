@@ -2,6 +2,7 @@ package keadhcp4
 
 import (
 	"context"
+	"net/netip"
 
 	"github.com/wfdewith/terraform-provider-kea/kea"
 	"github.com/wfdewith/terraform-provider-kea/kea/keaquery"
@@ -39,10 +40,16 @@ func (c *Client) AddReservation(ctx context.Context, target kea.OperationTarget,
 	return c.persist(ctx, "reservation added")
 }
 
+// UpdateReservation replaces the reservation with the same subnet and
+// identifier, and adds it to the servers that do not hold it.
 func (c *Client) UpdateReservation(ctx context.Context, target kea.OperationTarget, reservation Reservation) error {
-	err := kea.Exec(ctx, c.transport, "reservation-update", kea.WithTarget(target, struct {
+	arguments := kea.WithTarget(target, struct {
 		Reservation Reservation `json:"reservation"`
-	}{reservation}))
+	}{reservation})
+	err := c.upsert(ctx, "reservation-add", "reservation-update", arguments, func(server *Client) (bool, error) {
+		found, err := server.GetReservation(ctx, target, reservation.query())
+		return found != nil, err
+	})
 	if err != nil {
 		return err
 	}
@@ -54,4 +61,28 @@ func (c *Client) DeleteReservation(ctx context.Context, target kea.OperationTarg
 		return err
 	}
 	return c.persist(ctx, "reservation deleted")
+}
+
+// query identifies the reservation by the first identifier it holds, or by
+// its address when it has none.
+func (r Reservation) query() keaquery.ReservationQuery {
+	for _, id := range []struct {
+		kind  string
+		value kea.HexID
+	}{
+		{"circuit-id", r.CircuitID},
+		{"client-id", r.ClientID},
+		{"duid", r.DUID},
+		{"flex-id", r.FlexID},
+		{"hw-address", r.HWAddress},
+	} {
+		if len(id.value) > 0 {
+			return keaquery.ReservationByIdentifier(r.SubnetID, id.kind, id.value.String())
+		}
+	}
+	var ip netip.Addr
+	if r.IPAddress != nil {
+		ip = *r.IPAddress
+	}
+	return keaquery.ReservationByIP(r.SubnetID, ip)
 }

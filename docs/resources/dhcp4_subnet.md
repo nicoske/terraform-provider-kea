@@ -138,6 +138,7 @@ resource "kea_dhcp4_subnet" "lab" {
 
 ### Read-Only
 
+- `in_sync` (Boolean) Whether every server of the provider answers the same for this resource. `false` plans an update that writes it to every server again.
 - `shared_network_name` (String) Name of the shared network the subnet belongs to, if any. Shared networks are not managed by this resource.
 
 <a id="nestedblock--option_data"></a>

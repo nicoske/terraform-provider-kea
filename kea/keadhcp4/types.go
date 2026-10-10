@@ -34,6 +34,34 @@ type Reservation struct {
 	UserContext    *json.RawMessage `json:"user-context,omitempty"`
 }
 
+type ClientClass struct {
+	Name string `json:"name"`
+
+	Test                 *string `json:"test,omitempty"`
+	TemplateTest         *string `json:"template-test,omitempty"`
+	OnlyInAdditionalList *bool   `json:"only-in-additional-list,omitempty"`
+
+	BootFileName     *string          `json:"boot-file-name,omitempty"`
+	NextServer       *netip.Addr      `json:"next-server,omitempty"`
+	OptionData       []OptionData     `json:"option-data,omitempty"`
+	OptionDef        []OptionDef      `json:"option-def,omitempty"`
+	ServerHostname   *string          `json:"server-hostname,omitempty"`
+	ValidLifetime    *uint32          `json:"valid-lifetime,omitempty"`
+	MinValidLifetime *uint32          `json:"min-valid-lifetime,omitempty"`
+	MaxValidLifetime *uint32          `json:"max-valid-lifetime,omitempty"`
+	UserContext      *json.RawMessage `json:"user-context,omitempty"`
+}
+
+type OptionDef struct {
+	Name        string  `json:"name"`
+	Code        uint8   `json:"code"`
+	Type        string  `json:"type"`
+	Array       *bool   `json:"array,omitempty"`
+	RecordTypes *string `json:"record-types,omitempty"`
+	Space       *string `json:"space,omitempty"`
+	Encapsulate *string `json:"encapsulate,omitempty"`
+}
+
 type OptionData struct {
 	Name          *string           `json:"name,omitempty"`
 	Code          *uint8            `json:"code,omitempty"`
@@ -120,6 +148,51 @@ func (r *Reservation) UnmarshalJSON(data []byte) error {
 	if r.NextServer != nil && (!r.NextServer.IsValid() || r.NextServer.IsUnspecified()) {
 		r.NextServer = nil
 	}
+
+	return nil
+}
+
+func (c *ClientClass) UnmarshalJSON(data []byte) error {
+	type Alias ClientClass
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(c),
+	}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// The Kea API returns these fields as empty strings when not set,
+	// rather than omitting them from the response.
+	c.BootFileName = nilIfEmpty(c.BootFileName)
+	c.ServerHostname = nilIfEmpty(c.ServerHostname)
+
+	// The Kea API returns "0.0.0.0" for next-server when not set.
+	if c.NextServer != nil && (!c.NextServer.IsValid() || c.NextServer.IsUnspecified()) {
+		c.NextServer = nil
+	}
+
+	return nil
+}
+
+func (d *OptionDef) UnmarshalJSON(data []byte) error {
+	type Alias OptionDef
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(d),
+	}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// The Kea API returns these fields as empty strings when not set,
+	// rather than omitting them from the response.
+	d.RecordTypes = nilIfEmpty(d.RecordTypes)
+	d.Encapsulate = nilIfEmpty(d.Encapsulate)
 
 	return nil
 }

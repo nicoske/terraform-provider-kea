@@ -2,6 +2,7 @@ package dhcp4_test
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -237,6 +238,32 @@ func TestAccReservationDataSource_staticGlobal(t *testing.T) {
 	})
 }
 
+func TestAccReservationDataSource_operationTarget(t *testing.T) {
+	resourceName := "data.kea_dhcp4_reservation.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationDataSourceConfig_staticByHWAddress(1, acctest.StaticSubnetMAC),
+				Check:  resource.TestCheckResourceAttr(resourceName, "operation_target", "all"),
+			},
+			{
+				Config: testAccReservationDataSourceConfig_withTarget(1, acctest.StaticSubnetMAC, "memory"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "operation_target", "memory"),
+					resource.TestCheckResourceAttr(resourceName, "ip_address", acctest.StaticSubnetIP),
+				),
+			},
+			{
+				Config:      testAccReservationDataSourceConfig_withTarget(1, acctest.StaticSubnetMAC, "database"),
+				ExpectError: regexp.MustCompile("Reservation Not Found"),
+			},
+		},
+	})
+}
+
 func testAccReservationDataSourceConfig_basic(subnetID uint32, mac, ip string) string {
 	return fmt.Sprintf(`
 %s
@@ -395,4 +422,16 @@ data "kea_dhcp4_reservation" "test" {
   ip_address = %q
 }
 `, acctest.ProviderConfig(), subnetID, ip)
+}
+
+func testAccReservationDataSourceConfig_withTarget(subnetID uint32, mac, target string) string {
+	return fmt.Sprintf(`
+%s
+
+data "kea_dhcp4_reservation" "test" {
+  subnet_id        = %d
+  hw_address       = %q
+  operation_target = %q
+}
+`, acctest.ProviderConfig(), subnetID, mac, target)
 }

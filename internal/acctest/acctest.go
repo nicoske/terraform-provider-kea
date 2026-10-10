@@ -93,3 +93,9 @@ const (
 
 // Static client class defined in testing/kea-dhcp4.conf
 const StaticClientClass = "static-class"
+
+// Static subnet defined in testing/kea-dhcp4.conf
+const (
+	StaticSubnetID     = 1
+	StaticSubnetPrefix = "10.67.0.0/24"
+)

@@ -36,7 +36,8 @@ services:
       - 8001:8001
       - 8002:8002
     volumes:
-      - ./kea-dhcp4.conf:/etc/kea/kea-dhcp4.conf:ro
+      - ./kea-dhcp4.conf:/usr/local/etc/kea-dhcp4.conf:ro
+      - ./config:/etc/kea
       - ./certs:/etc/kea/certs:ro
       - ./init-network.sh:/usr/local/bin/init-network.sh:ro
     entrypoint: ["/bin/sh", "/usr/local/bin/init-network.sh"]

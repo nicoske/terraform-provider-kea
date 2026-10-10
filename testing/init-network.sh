@@ -20,5 +20,8 @@ ip addr show dummy0
 ip addr show dummy1
 ip addr show dummy2
 
+# config-write needs a writable directory holding the startup config file
+cp /usr/local/etc/kea-dhcp4.conf /etc/kea/kea-dhcp4.conf
+
 echo "Starting Kea DHCP4 server..."
 exec /usr/sbin/kea-dhcp4 -X -c /etc/kea/kea-dhcp4.conf

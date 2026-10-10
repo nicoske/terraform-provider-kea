@@ -11,6 +11,7 @@ programmatically without requiring server restarts.
 
 Currently supported:
 - DHCPv4 host reservations (resource and data source)
+- DHCPv4 client classes (resource and data source)
 
 ## Requirements
 
@@ -33,6 +34,9 @@ channel. You must configure either:
 (`kea-ctrl-agent`). The Control Agent is deprecated in favor of direct HTTP
 control sockets on the DHCP services themselves. Configure the `http` hook
 library directly on your `kea-dhcp4` (or `kea-dhcp6`) service instead.
+
+Each resource needs a hook library on the Kea server: `host_cmds` for host
+reservations, `class_cmds` for client classes.
 
 See [`testing/kea-dhcp4.conf`](testing/kea-dhcp4.conf) for a working example of
 control socket and hook library configuration.

@@ -57,6 +57,12 @@ type ReservationModel struct {
 	OperationTarget types.String `tfsdk:"operation_target"`
 }
 
+// ReservationResourceModel adds the attributes that only the resource has.
+type ReservationResourceModel struct {
+	ReservationModel
+	InSync types.Bool `tfsdk:"in_sync"`
+}
+
 func (m *ReservationModel) ToAPI(ctx context.Context) (keadhcp4.Reservation, diag.Diagnostics) {
 	var diags diag.Diagnostics
 

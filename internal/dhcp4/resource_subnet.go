@@ -42,6 +42,7 @@ func (r *SubnetResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"Timers left unset (`valid_lifetime`, `min_valid_lifetime`, `max_valid_lifetime`, `renew_timer` and `rebind_timer`) take the value Kea derives from the global configuration.\n\n" +
 			"**Important:** Requires the `subnet_cmds` hook library.",
 		Attributes: map[string]schema.Attribute{
+			"in_sync": inSyncAttribute(),
 			"id": schema.Int64Attribute{
 				Description: "Subnet ID. Must be unique within the server. " +
 					"Kea only assigns IDs itself when no subnet has an explicit ID, so the ID is always set explicitly.",
@@ -243,7 +244,7 @@ func (r *SubnetResource) Configure(ctx context.Context, req resource.ConfigureRe
 }
 
 func (r *SubnetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data SubnetModel
+	var data SubnetResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -273,11 +274,12 @@ func (r *SubnetResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	resp.Diagnostics.Append(data.FromAPI(ctx, created)...)
+	data.InSync = types.BoolValue(true)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *SubnetResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data SubnetModel
+	var data SubnetResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -286,9 +288,9 @@ func (r *SubnetResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	driftID := data.driftID()
 	ctx, reportDrift := driftWarnings(ctx, &resp.Diagnostics, &driftID)
-	defer reportDrift()
 
 	subnet, err := r.client.GetSubnet(ctx, data.BuildQuery())
+	data.InSync = types.BoolValue(reportDrift())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Subnet", err.Error())
 		return
@@ -304,7 +306,7 @@ func (r *SubnetResource) Read(ctx context.Context, req resource.ReadRequest, res
 }
 
 func (r *SubnetResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data SubnetModel
+	var data SubnetResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -334,11 +336,12 @@ func (r *SubnetResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	resp.Diagnostics.Append(data.FromAPI(ctx, updated)...)
+	data.InSync = types.BoolValue(true)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *SubnetResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data SubnetModel
+	var data SubnetResourceModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {

@@ -49,10 +49,16 @@ func (c *Client) AddSubnet(ctx context.Context, subnet Subnet) error {
 	return c.persist(ctx, "subnet added")
 }
 
+// UpdateSubnet replaces the subnet with the same ID, and adds it to the
+// servers that do not hold it.
 func (c *Client) UpdateSubnet(ctx context.Context, subnet Subnet) error {
-	err := kea.Exec(ctx, c.transport, "subnet4-update", struct {
+	arguments := struct {
 		Subnet4 []Subnet `json:"subnet4"`
-	}{[]Subnet{subnet}})
+	}{[]Subnet{subnet}}
+	err := c.upsert(ctx, "subnet4-add", "subnet4-update", arguments, func(server *Client) (bool, error) {
+		found, err := server.GetSubnet(ctx, keaquery.SubnetByID(subnet.ID))
+		return found != nil, err
+	})
 	if err != nil {
 		return err
 	}

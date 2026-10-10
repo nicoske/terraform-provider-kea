@@ -66,6 +66,12 @@ var poolObjectType = types.ObjectType{
 	},
 }
 
+// SubnetResourceModel adds the attributes that only the resource has.
+type SubnetResourceModel struct {
+	SubnetModel
+	InSync types.Bool `tfsdk:"in_sync"`
+}
+
 func (m *SubnetModel) ToAPI(ctx context.Context) (keadhcp4.Subnet, diag.Diagnostics) {
 	var diags diag.Diagnostics
 

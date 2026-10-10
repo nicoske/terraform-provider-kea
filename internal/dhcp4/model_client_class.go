@@ -38,6 +38,12 @@ type OptionDefModel struct {
 	Encapsulate types.String `tfsdk:"encapsulate"`
 }
 
+// ClientClassResourceModel adds the attributes that only the resource has.
+type ClientClassResourceModel struct {
+	ClientClassModel
+	InSync types.Bool `tfsdk:"in_sync"`
+}
+
 func (m *ClientClassModel) ToAPI(ctx context.Context) (keadhcp4.ClientClass, diag.Diagnostics) {
 	var diags diag.Diagnostics
 

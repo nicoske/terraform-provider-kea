@@ -9,8 +9,10 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/wfdewith/terraform-provider-kea/internal/acctest"
 	"github.com/wfdewith/terraform-provider-kea/kea"
 	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
@@ -109,11 +111,10 @@ func TestAccReservation_serversStrictSync(t *testing.T) {
 					regexp.QuoteMeta(servers[1]))),
 			},
 			{
-				// Without strict_sync the first server's answer is used
-				Config: testAccReservationConfig_servers(false, mac, ip, servers...),
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
-				},
+				// Without strict_sync the first server's answer is used and the update converges
+				Config:           testAccReservationConfig_servers(false, mac, ip, servers...),
+				ConfigPlanChecks: testAccConvergePlanChecks("kea_dhcp4_reservation.test"),
+				PostApplyFunc:    testAccCheckReservationOnServers(t, query, ip, servers...),
 			},
 		},
 	})
@@ -232,4 +233,157 @@ resource "kea_dhcp4_reservation" "test" {
   operation_target = "memory"
 }
 `, mac, ip)
+}
+
+func TestAccReservation_serversConverge(t *testing.T) {
+	resourceName := "kea_dhcp4_reservation.test"
+	mac := "02:5e:41:00:00:06"
+	ip := "10.67.0.157"
+	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
+	servers := testAccServers()
+	config := testAccReservationConfig_servers(false, mac, ip, servers...)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheckServers(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check:  resource.TestCheckResourceAttr(resourceName, "in_sync", "true"),
+			},
+			{
+				PreConfig: func() {
+					err := testAccKeaClientAt(servers[1]).DeleteReservation(context.Background(), kea.OperationTargetMemory, query)
+					if err != nil {
+						t.Fatalf("failed to delete reservation on %s: %v", servers[1], err)
+					}
+				},
+				Config:           config,
+				ConfigPlanChecks: testAccConvergePlanChecks(resourceName),
+				Check:            resource.TestCheckResourceAttr(resourceName, "in_sync", "true"),
+				PostApplyFunc:    testAccCheckReservationOnServers(t, query, ip, servers...),
+			},
+			{
+				PreConfig: func() {
+					other := netip.MustParseAddr("10.67.0.158")
+					reservation := keadhcp4.Reservation{
+						SubnetID:  1,
+						HWAddress: kea.HexID{0x02, 0x5e, 0x41, 0x00, 0x00, 0x06},
+						IPAddress: &other,
+					}
+					err := testAccKeaClientAt(servers[1]).UpdateReservation(context.Background(), kea.OperationTargetMemory, reservation)
+					if err != nil {
+						t.Fatalf("failed to update reservation on %s: %v", servers[1], err)
+					}
+				},
+				Config:           config,
+				ConfigPlanChecks: testAccConvergePlanChecks(resourceName),
+				PostApplyFunc:    testAccCheckReservationOnServers(t, query, ip, servers...),
+			},
+		},
+	})
+}
+
+func TestAccClientClass_serversConverge(t *testing.T) {
+	resourceName := "kea_dhcp4_client_class.test"
+	name := "servers-converge-class"
+	servers := testAccServers()
+	config := acctest.ProviderConfigServers(false, servers...) + fmt.Sprintf(`
+resource "kea_dhcp4_client_class" "test" {
+  name = %q
+  test = "option[60].text == 'converge'"
+}
+`, name)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheckServers(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check:  resource.TestCheckResourceAttr(resourceName, "in_sync", "true"),
+			},
+			{
+				PreConfig: func() {
+					if err := testAccKeaClientAt(servers[1]).DeleteClientClass(context.Background(), name); err != nil {
+						t.Fatalf("failed to delete client class on %s: %v", servers[1], err)
+					}
+				},
+				Config:           config,
+				ConfigPlanChecks: testAccConvergePlanChecks(resourceName),
+				Check:            resource.TestCheckResourceAttr(resourceName, "in_sync", "true"),
+				PostApplyFunc: func() {
+					for _, server := range servers {
+						class, err := testAccKeaClientAt(server).GetClientClass(context.Background(), name)
+						if err != nil {
+							t.Fatalf("failed to get client class from %s: %v", server, err)
+						}
+						if class == nil {
+							t.Fatalf("client class does not exist on %s", server)
+						}
+					}
+				},
+			},
+		},
+	})
+}
+
+func TestAccSubnet_serversConverge(t *testing.T) {
+	resourceName := "kea_dhcp4_subnet.test"
+	var id uint32 = 120
+	servers := testAccServers()
+	config := acctest.ProviderConfigServers(false, servers...) + fmt.Sprintf(`
+resource "kea_dhcp4_subnet" "test" {
+  id     = %d
+  subnet = "10.67.20.0/24"
+
+  pools {
+    pool = "10.67.20.10 - 10.67.20.20"
+  }
+}
+`, id)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheckServers(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check:  resource.TestCheckResourceAttr(resourceName, "in_sync", "true"),
+			},
+			{
+				PreConfig: func() {
+					if err := testAccKeaClientAt(servers[1]).DeleteSubnet(context.Background(), id); err != nil {
+						t.Fatalf("failed to delete subnet on %s: %v", servers[1], err)
+					}
+				},
+				Config:           config,
+				ConfigPlanChecks: testAccConvergePlanChecks(resourceName),
+				Check:            resource.TestCheckResourceAttr(resourceName, "in_sync", "true"),
+				PostApplyFunc: func() {
+					for _, server := range servers {
+						subnet, err := testAccKeaClientAt(server).GetSubnet(context.Background(), keaquery.SubnetByID(id))
+						if err != nil {
+							t.Fatalf("failed to get subnet from %s: %v", server, err)
+						}
+						if subnet == nil || len(subnet.Pools) != 1 {
+							t.Fatalf("subnet on %s: %+v", server, subnet)
+						}
+					}
+				},
+			},
+		},
+	})
+}
+
+// testAccConvergePlanChecks expects an update that only sets in_sync, and an
+// empty plan once applied.
+func testAccConvergePlanChecks(resourceName string) resource.ConfigPlanChecks {
+	return resource.ConfigPlanChecks{
+		PreApply: []plancheck.PlanCheck{
+			plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+			plancheck.ExpectKnownValue(resourceName, tfjsonpath.New("in_sync"), knownvalue.Bool(true)),
+		},
+		PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+	}
 }

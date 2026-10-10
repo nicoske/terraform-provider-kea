@@ -117,6 +117,19 @@ export KEA_DHCP4_HTTP_PASSWORD="secret" # optional
 provider "kea" {}
 ```
 
+Changes made through the control channel live in memory only. Set
+`config_write = true` (or `KEA_DHCP4_CONFIG_WRITE=true`) to send `config-write`
+after every change so that Kea saves its configuration to disk:
+
+```terraform
+provider "kea" {
+  dhcp4 = {
+    address      = "http://kea-server:8000"
+    config_write = true
+  }
+}
+```
+
 Create a DHCP reservation:
 
 ```terraform

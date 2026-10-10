@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -36,6 +37,9 @@ type KeaProviderClientModel struct {
 	TLSClientCertFile types.String `tfsdk:"tls_client_cert_file"`
 	TLSClientKeyFile  types.String `tfsdk:"tls_client_key_file"`
 	TLSServerName     types.String `tfsdk:"tls_server_name"`
+
+	ConfigWrite         types.Bool   `tfsdk:"config_write"`
+	ConfigWriteFilename types.String `tfsdk:"config_write_filename"`
 }
 
 func New(version string) func() provider.Provider {
@@ -94,6 +98,17 @@ func (p *KeaProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 						Optional: true,
 						Description: "Server name used to verify the server certificate, when it differs from the host in `address`. " +
 							"Falls back to `KEA_DHCP4_TLS_SERVER_NAME` environment variable.",
+					},
+					"config_write": schema.BoolAttribute{
+						Optional: true,
+						Description: "Send `config-write` after every change so that Kea saves its running configuration to disk " +
+							"and keeps it across restarts. Defaults to `false`. Falls back to `KEA_DHCP4_CONFIG_WRITE` environment variable.",
+					},
+					"config_write_filename": schema.StringAttribute{
+						Optional: true,
+						Description: "File that `config-write` writes to, instead of the configuration file Kea was started with. " +
+							"Kea only accepts files in the directory of its startup configuration file. Only used when `config_write` is `true`. " +
+							"Falls back to `KEA_DHCP4_CONFIG_WRITE_FILENAME` environment variable.",
 					},
 				},
 			},
@@ -165,7 +180,17 @@ func configureDHCP4Client(data *KeaProviderClientModel) (*keadhcp4.Client, error
 		return nil, err
 	}
 
-	client := keadhcp4.NewClient(transport)
+	var opts []keadhcp4.ClientOption
+	configWrite, err := configBool(data, func(m *KeaProviderClientModel) types.Bool { return m.ConfigWrite }, "KEA_DHCP4_CONFIG_WRITE")
+	if err != nil {
+		return nil, err
+	}
+	if configWrite {
+		filename := configValue(data, func(m *KeaProviderClientModel) types.String { return m.ConfigWriteFilename }, "KEA_DHCP4_CONFIG_WRITE_FILENAME")
+		opts = append(opts, keadhcp4.WithConfigWrite(filename))
+	}
+
+	client := keadhcp4.NewClient(transport, opts...)
 	return client, nil
 }
 
@@ -176,6 +201,23 @@ func configValue(data *KeaProviderClientModel, attr func(*KeaProviderClientModel
 		}
 	}
 	return os.Getenv(env)
+}
+
+func configBool(data *KeaProviderClientModel, attr func(*KeaProviderClientModel) types.Bool, env string) (bool, error) {
+	if data != nil {
+		if v := attr(data); !v.IsNull() && !v.IsUnknown() {
+			return v.ValueBool(), nil
+		}
+	}
+	s := os.Getenv(env)
+	if s == "" {
+		return false, nil
+	}
+	b, err := strconv.ParseBool(s)
+	if err != nil {
+		return false, fmt.Errorf("invalid %s: %w", env, err)
+	}
+	return b, nil
 }
 
 type transportConfig struct {

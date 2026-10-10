@@ -121,47 +121,7 @@ func (d *ReservationDataSource) Schema(ctx context.Context, req datasource.Schem
 					operationTargetValidator(),
 				},
 			},
-			"option_data": schema.SetNestedAttribute{
-				Description: "DHCP options configured for this reservation.",
-				Computed:    true,
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"name": schema.StringAttribute{
-							Description: "Option name.",
-							Computed:    true,
-						},
-						"code": schema.Int32Attribute{
-							Description: "Option code.",
-							Computed:    true,
-						},
-						"space": schema.StringAttribute{
-							Description: "Option space.",
-							Computed:    true,
-						},
-						"data": schema.StringAttribute{
-							Description: "Option value.",
-							Computed:    true,
-						},
-						"csv_format": schema.BoolAttribute{
-							Description: "Whether data is in CSV format (`true`) or raw format (`false`).",
-							Computed:    true,
-						},
-						"always_send": schema.BoolAttribute{
-							Description: "Whether this option is always sent to the client.",
-							Computed:    true,
-						},
-						"never_send": schema.BoolAttribute{
-							Description: "Whether this option is never sent to the client.",
-							Computed:    true,
-						},
-						"client_classes": schema.SetAttribute{
-							Description: "Client classes for which this option applies.",
-							Computed:    true,
-							ElementType: types.StringType,
-						},
-					},
-				},
-			},
+			"option_data": optionDataDataSourceAttribute("DHCP options configured for this reservation."),
 		},
 	}
 }

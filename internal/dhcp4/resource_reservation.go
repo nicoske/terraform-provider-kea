@@ -10,9 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework-nettypes/hwtypes"
 	"github.com/hashicorp/terraform-plugin-framework-nettypes/iptypes"
-	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -158,63 +156,7 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 			},
 		},
 		Blocks: map[string]schema.Block{
-			"option_data": schema.SetNestedBlock{
-				Description: "DHCP options to send to this client, overriding subnet and global options.",
-				NestedObject: schema.NestedBlockObject{
-					Attributes: map[string]schema.Attribute{
-						"name": schema.StringAttribute{
-							Description: "Option name (e.g., `domain-name-servers`). Required if `code` is not set.",
-							Optional:    true,
-							Computed:    true,
-						},
-						"code": schema.Int32Attribute{
-							Description: "Option code (0-255). Required if `name` is not set.",
-							Optional:    true,
-							Computed:    true,
-							Validators: []validator.Int32{
-								int32validator.Between(0, math.MaxUint8),
-							},
-						},
-						"space": schema.StringAttribute{
-							Description: "Option space. Defaults to `dhcp4`.",
-							Optional:    true,
-							Computed:    true,
-						},
-						"data": schema.StringAttribute{
-							Description: "Option value. Format depends on `csv_format`.",
-							Optional:    true,
-						},
-						"csv_format": schema.BoolAttribute{
-							Description: "When `true` (default), data is comma-separated values. " +
-								"When `false`, data is raw bytes as hex (`dead` or `0xdead`), colon/space-delimited octets (`de:ad` or `de ad`), or a quoted string (`'text'`).",
-							Optional: true,
-							Computed: true,
-						},
-						"always_send": schema.BoolAttribute{
-							Description: "Always send this option, even if not requested by the client.",
-							Optional:    true,
-							Computed:    true,
-						},
-						"never_send": schema.BoolAttribute{
-							Description: "Never send this option to the client.",
-							Optional:    true,
-							Computed:    true,
-						},
-						"client_classes": schema.SetAttribute{
-							Description: "Only send this option to clients in these classes.",
-							Optional:    true,
-							ElementType: types.StringType,
-						},
-					},
-					Validators: []validator.Object{
-						optionPayloadValidator{},
-						objectvalidator.AtLeastOneOf(
-							path.MatchRoot("name"),
-							path.MatchRoot("code"),
-						),
-					},
-				},
-			},
+			"option_data": optionDataBlock("DHCP options to send to this client, overriding subnet and global options."),
 		},
 	}
 }

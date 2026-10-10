@@ -57,17 +57,6 @@ type ReservationModel struct {
 	OperationTarget types.String `tfsdk:"operation_target"`
 }
 
-type OptionDataModel struct {
-	Name          types.String `tfsdk:"name"`
-	Code          types.Int32  `tfsdk:"code"`
-	Space         types.String `tfsdk:"space"`
-	Data          types.String `tfsdk:"data"`
-	CSVFormat     types.Bool   `tfsdk:"csv_format"`
-	AlwaysSend    types.Bool   `tfsdk:"always_send"`
-	NeverSend     types.Bool   `tfsdk:"never_send"`
-	ClientClasses types.Set    `tfsdk:"client_classes"`
-}
-
 func (m *ReservationModel) ToAPI(ctx context.Context) (keadhcp4.Reservation, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
@@ -89,16 +78,9 @@ func (m *ReservationModel) ToAPI(ctx context.Context) (keadhcp4.Reservation, dia
 		diags.Append(m.ClientClasses.ElementsAs(ctx, &reservation.ClientClasses, false)...)
 	}
 
-	if !m.OptionData.IsNull() && !m.OptionData.IsUnknown() {
-		var optionDataModels []OptionDataModel
-		diags.Append(m.OptionData.ElementsAs(ctx, &optionDataModels, false)...)
-
-		for _, od := range optionDataModels {
-			option, d := od.ToAPI(ctx)
-			diags.Append(d...)
-			reservation.OptionData = append(reservation.OptionData, option)
-		}
-	}
+	optionData, d := optionDataToAPI(ctx, m.OptionData)
+	diags.Append(d...)
+	reservation.OptionData = optionData
 
 	if !m.UserContext.IsNull() && !m.UserContext.IsUnknown() {
 		userContext := json.RawMessage(m.UserContext.ValueString())
@@ -131,29 +113,9 @@ func (m *ReservationModel) FromAPI(ctx context.Context, r *keadhcp4.Reservation)
 		m.ClientClasses = types.SetNull(types.StringType)
 	}
 
-	if len(r.OptionData) > 0 {
-		var prior []OptionDataModel
-		if !m.OptionData.IsNull() && !m.OptionData.IsUnknown() {
-			diags.Append(m.OptionData.ElementsAs(ctx, &prior, false)...)
-		}
-		modelIndex, d := matchOptions(ctx, prior, r.OptionData)
-		diags.Append(d...)
-
-		var optionDataModels []OptionDataModel
-		for i, od := range r.OptionData {
-			var odModel OptionDataModel
-			diags.Append(odModel.FromAPI(ctx, &od)...)
-			if j := modelIndex[i]; j >= 0 {
-				odModel.Data = prior[j].Data
-			}
-			optionDataModels = append(optionDataModels, odModel)
-		}
-		optionDataSet, d := types.SetValueFrom(ctx, m.OptionData.ElementType(ctx), optionDataModels)
-		diags.Append(d...)
-		m.OptionData = optionDataSet
-	} else {
-		m.OptionData = types.SetNull(m.OptionData.ElementType(ctx))
-	}
+	optionData, d := optionDataFromAPI(ctx, m.OptionData, r.OptionData)
+	diags.Append(d...)
+	m.OptionData = optionData
 
 	if r.UserContext != nil {
 		m.UserContext = jsontypes.NewNormalizedValue(string(*r.UserContext))
@@ -247,65 +209,6 @@ func (m *ReservationModel) getIdentifier() (identifierType, identifier string) {
 	}
 }
 
-func (o *OptionDataModel) ToAPI(ctx context.Context) (keadhcp4.OptionData, diag.Diagnostics) {
-	var diags diag.Diagnostics
-
-	option := keadhcp4.OptionData{
-		Name:       stringPointer(o.Name),
-		Space:      stringPointer(o.Space),
-		AlwaysSend: boolPointer(o.AlwaysSend),
-		NeverSend:  boolPointer(o.NeverSend),
-	}
-
-	if !o.Code.IsNull() && !o.Code.IsUnknown() {
-		code := uint8(o.Code.ValueInt32())
-		option.Code = &code
-	}
-
-	payload, err := parseOptionPayload(o.Data, o.CSVFormat)
-	if err != nil {
-		diags.AddError("Invalid Option Data", err.Error())
-	}
-	option.Payload = payload
-
-	if !o.ClientClasses.IsNull() && !o.ClientClasses.IsUnknown() {
-		diags.Append(o.ClientClasses.ElementsAs(ctx, &option.ClientClasses, false)...)
-	}
-
-	return option, diags
-}
-
-func (o *OptionDataModel) FromAPI(ctx context.Context, od *keadhcp4.OptionData) diag.Diagnostics {
-	var diags diag.Diagnostics
-
-	o.Name = types.StringPointerValue(od.Name)
-	if od.Code != nil {
-		o.Code = types.Int32Value(int32(*od.Code))
-	} else {
-		o.Code = types.Int32Null()
-	}
-	o.Space = types.StringPointerValue(od.Space)
-	o.Data, o.CSVFormat = types.StringNull(), types.BoolNull()
-	switch p := od.Payload.(type) {
-	case kea.CSVPayload:
-		o.Data, o.CSVFormat = types.StringValue(string(p)), types.BoolValue(true)
-	case kea.BinaryPayload:
-		o.Data, o.CSVFormat = types.StringValue(p.String()), types.BoolValue(false)
-	}
-	o.AlwaysSend = types.BoolPointerValue(od.AlwaysSend)
-	o.NeverSend = types.BoolPointerValue(od.NeverSend)
-
-	if len(od.ClientClasses) > 0 {
-		setVal, d := types.SetValueFrom(ctx, types.StringType, od.ClientClasses)
-		diags.Append(d...)
-		o.ClientClasses = setVal
-	} else {
-		o.ClientClasses = types.SetNull(types.StringType)
-	}
-
-	return diags
-}
-
 func hexIDToString(id kea.HexID) *string {
 	if len(id) == 0 {
 		return nil
@@ -366,11 +269,4 @@ func macAddrToHexID(addr hwtypes.MACAddress) kea.HexID {
 	a, _ := addr.ValueMACAddress()
 	id, _ := kea.ParseHexID(a.String())
 	return id
-}
-
-func parseOptionPayload(data types.String, csvFormat types.Bool) (kea.OptionPayload, error) {
-	if data.IsNull() || data.IsUnknown() {
-		return nil, nil
-	}
-	return kea.NewOptionPayload(data.ValueString(), kea.CSVFormatOf(boolPointer(csvFormat)))
 }

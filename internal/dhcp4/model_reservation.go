@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"net"
 	"net/netip"
+	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework-nettypes/hwtypes"
@@ -165,6 +169,40 @@ func (m *ReservationModel) ComputeID() string {
 	}
 
 	return fmt.Sprintf("%d/ip-address/%s", subnetID, m.IPAddress.ValueString())
+}
+
+// parseReservationID parses an ID in the format produced by ComputeID.
+func parseReservationID(id string) (subnetID int64, identifierType, identifier string, err error) {
+	parts := strings.Split(id, "/")
+	if len(parts) != 3 || parts[2] == "" {
+		return 0, "", "", fmt.Errorf("expected {subnet_id}/{identifier_type}/{identifier}, got %q", id)
+	}
+
+	subnetID, err = strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || subnetID < 0 || subnetID > math.MaxUint32 {
+		return 0, "", "", fmt.Errorf("subnet_id must be an integer between 0 and %d, got %q", uint32(math.MaxUint32), parts[0])
+	}
+
+	identifierType, identifier = parts[1], parts[2]
+	switch identifierType {
+	case "circuit-id", "client-id", "duid", "flex-id":
+		_, err = kea.ParseHexID(identifier)
+	case "hw-address":
+		_, err = net.ParseMAC(identifier)
+	case "ip-address":
+		var ip netip.Addr
+		ip, err = netip.ParseAddr(identifier)
+		if err == nil && !ip.Is4() {
+			err = fmt.Errorf("not an IPv4 address")
+		}
+	default:
+		return 0, "", "", fmt.Errorf("unsupported identifier type %q, expected one of circuit-id, client-id, duid, flex-id, hw-address or ip-address", identifierType)
+	}
+	if err != nil {
+		return 0, "", "", fmt.Errorf("invalid %s %q: %w", identifierType, identifier, err)
+	}
+
+	return subnetID, identifierType, identifier, nil
 }
 
 func (m *ReservationModel) getIdentifier() (identifierType, identifier string) {

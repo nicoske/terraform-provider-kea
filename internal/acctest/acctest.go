@@ -134,3 +134,6 @@ const (
 	StaticGlobalMAC = "02:ac:10:00:00:03"
 	StaticGlobalIP  = "192.168.67.10"
 )
+
+// Static client class defined in testing/kea-dhcp4.conf
+const StaticClientClass = "static-class"

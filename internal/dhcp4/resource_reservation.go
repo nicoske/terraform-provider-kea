@@ -3,6 +3,7 @@ package dhcp4
 import (
 	"context"
 	"math"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework-nettypes/hwtypes"
@@ -11,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -28,6 +30,7 @@ import (
 
 var _ resource.ResourceWithConfigure = (*ReservationResource)(nil)
 var _ resource.ResourceWithConfigValidators = (*ReservationResource)(nil)
+var _ resource.ResourceWithImportState = (*ReservationResource)(nil)
 
 type ReservationResource struct {
 	client *keadhcp4.Client
@@ -226,6 +229,27 @@ func (r *ReservationResource) Configure(ctx context.Context, req resource.Config
 	}
 
 	r.client = keaClients.DHCP4
+}
+
+func (r *ReservationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	subnetID, identifierType, identifier, err := parseReservationID(req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid Import ID", err.Error())
+		return
+	}
+
+	var value attr.Value
+	switch identifierType {
+	case "hw-address":
+		value = hwtypes.NewMACAddressValue(identifier)
+	case "ip-address":
+		value = iptypes.NewIPv4AddressValue(identifier)
+	default:
+		value = keatypes.NewHexIDValue(identifier)
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("subnet_id"), subnetID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(strings.ReplaceAll(identifierType, "-", "_")), value)...)
 }
 
 func (r *ReservationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

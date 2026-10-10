@@ -172,3 +172,18 @@ Optional:
 - `name` (String) Option name (e.g., `domain-name-servers`). Required if `code` is not set.
 - `never_send` (Boolean) Never send this option to the client.
 - `space` (String) Option space. Defaults to `dhcp4`.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Reservation identified by {subnet_id}/{identifier_type}/{identifier}, where
+# identifier_type is one of circuit-id, client-id, duid, flex-id or hw-address
+terraform import kea_dhcp4_reservation.server01 1/hw-address/aa:bb:cc:dd:ee:01
+
+# Reservation identified by its reserved address
+terraform import kea_dhcp4_reservation.server02 1/ip-address/192.0.2.11
+```

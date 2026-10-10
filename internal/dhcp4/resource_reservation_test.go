@@ -377,6 +377,83 @@ func TestAccReservation_changeIdentity(t *testing.T) {
 	}
 }
 
+func TestAccReservation_importByIdentifier(t *testing.T) {
+	clientID := "01:3c:5e:a1:07:d2"
+	ip := "10.67.0.81"
+	resourceName := "kea_dhcp4_reservation.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationConfig_withClientID(1, clientID, ip),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateId:     fmt.Sprintf("1/client-id/%s", clientID),
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccReservation_importByIP(t *testing.T) {
+	mac := "02:3c:5e:a1:07:d3"
+	ip := "10.67.0.82"
+	hostname := fmt.Sprintf("test-host-%d", rand.Intn(10000))
+	resourceName := "kea_dhcp4_reservation.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationConfig_withHostname(1, mac, ip, hostname),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateId:     fmt.Sprintf("1/ip-address/%s", ip),
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccReservation_importInvalidID(t *testing.T) {
+	mac := "02:3c:5e:a1:07:d4"
+	ip := "10.67.0.83"
+	resourceName := "kea_dhcp4_reservation.test"
+
+	testCases := map[string]string{
+		"too_few_parts":   "1/hw-address",
+		"bad_subnet_id":   "x/hw-address/" + mac,
+		"negative_subnet": "-1/hw-address/" + mac,
+		"unknown_type":    "1/remote-id/" + mac,
+		"bad_mac":         "1/hw-address/zz:zz",
+		"bad_hex":         "1/client-id/xyz",
+		"ipv6_address":    "1/ip-address/2001:db8::1",
+	}
+
+	steps := []resource.TestStep{{Config: testAccReservationConfig_basic(1, mac, ip)}}
+	for _, id := range testCases {
+		steps = append(steps, resource.TestStep{
+			ResourceName:  resourceName,
+			ImportState:   true,
+			ImportStateId: id,
+			ExpectError:   regexp.MustCompile("Invalid Import ID"),
+		})
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps:                    steps,
+	})
+}
+
 func TestAccReservation_reorderSetsNoUpdate(t *testing.T) {
 	mac := "02:e7:2f:58:c3:9b"
 	ip := "10.67.0.165"

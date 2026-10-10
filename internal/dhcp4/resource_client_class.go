@@ -248,6 +248,9 @@ func (r *ClientClassResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
+	ctx, reportDrift := driftWarnings(ctx, &resp.Diagnostics, &data.ID)
+	defer reportDrift()
+
 	class, err := r.client.GetClientClass(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Client Class", err.Error())

@@ -160,6 +160,41 @@ data "kea_dhcp4_reservation" "test" {
 `, acctest.StaticSubnetMAC)
 }
 
+func TestProvider_serversConflictsWithAddress(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "kea" {
+  dhcp4 = {
+    address = %[1]q
+    servers = [{ address = %[1]q }]
+  }
+}
+`, os.Getenv("KEA_DHCP4_ADDRESS")) + testAccProviderConfig_staticReservation(),
+				ExpectError: regexp.MustCompile(`Invalid Attribute Combination`),
+			},
+		},
+	})
+}
+
+func TestProvider_serversDuplicateAddress(t *testing.T) {
+	address := os.Getenv("KEA_DHCP4_ADDRESS")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      acctest.ProviderConfigServers(false, address, address) + testAccProviderConfig_staticReservation(),
+				ExpectError: regexp.MustCompile(`duplicate\s+server\s+address`),
+			},
+		},
+	})
+}
+
 func TestAccProvider_configWrite(t *testing.T) {
 	configFile := testAccConfigFile(t)
 	mac := "02:11:22:33:99:01"

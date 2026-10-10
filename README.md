@@ -154,8 +154,9 @@ provider "kea" {
 ```
 
 A change stops at the first server that fails, and the error names the
-servers that already applied it. Reads ask every server and warn when one
-answers differently from the first; `strict_sync = true` makes that an error.
+servers that already applied it. Reads ask every server, use the answer of
+the first server that answers and warn when another one answers differently
+or does not answer; `strict_sync = true` makes that an error.
 
 Create a DHCP reservation:
 

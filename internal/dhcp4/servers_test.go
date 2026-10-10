@@ -119,6 +119,36 @@ func TestAccReservation_serversStrictSync(t *testing.T) {
 	})
 }
 
+func TestAccReservation_serversUnavailable(t *testing.T) {
+	mac := "02:5e:41:00:00:05"
+	ip := "10.67.0.156"
+	first := os.Getenv("KEA_DHCP4_ADDRESS")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheckServers(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationConfig_servers(false, mac, ip, first),
+			},
+			{
+				Config: testAccReservationConfig_servers(false, mac, ip, testAccUnreachableAddress, first),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+			{
+				Config: testAccReservationConfig_servers(true, mac, ip, first, testAccUnreachableAddress),
+				ExpectError: regexp.MustCompile(fmt.Sprintf(`servers\s+out\s+of\s+sync:\s+%s\s+did\s+not\s+answer\s+reservation-get`,
+					regexp.QuoteMeta(testAccUnreachableAddress))),
+			},
+			{
+				Config: testAccReservationConfig_servers(false, mac, ip, first),
+			},
+		},
+	})
+}
+
 func TestAccClientClass_servers(t *testing.T) {
 	name := "servers-class"
 	servers := testAccServers()

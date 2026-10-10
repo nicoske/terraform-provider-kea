@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"testing"
 
 	"github.com/wfdewith/terraform-provider-kea/kea"
@@ -22,6 +23,10 @@ func (f *fakeServer) Send(ctx context.Context, req kea.CommandRequest, resp *kea
 	}
 	*resp = f.answers[req.Command]
 	return nil
+}
+
+func unreachable() *fakeServer {
+	return &fakeServer{err: &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}}
 }
 
 func answer(result kea.ResultCode, text, arguments string) kea.CommandResponse {
@@ -243,13 +248,87 @@ func TestMultiTransport_strictRead(t *testing.T) {
 	}
 }
 
+func TestMultiTransport_readUnavailable(t *testing.T) {
+	servers := readServers(`{"ip-address": "10.0.0.1"}`, `{"ip-address": "10.0.0.2"}`, `{"ip-address": "10.0.0.2"}`)
+	servers[0] = unreachable()
+	var drifts []kea.Drift
+	ctx := kea.WithDriftReporter(context.Background(), func(d kea.Drift) { drifts = append(drifts, d) })
+
+	result, err := execRead(ctx, multi(servers...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if (*result)["ip-address"] != "10.0.0.2" {
+		t.Fatalf("expected the second server's answer, got %v", *result)
+	}
+	if len(drifts) != 1 || drifts[0].Server != "a" || !drifts[0].Unavailable() {
+		t.Fatalf("drifts: %v", drifts)
+	}
+	for _, s := range servers {
+		if len(s.commands) != 1 {
+			t.Fatalf("commands sent: %v", s.commands)
+		}
+	}
+}
+
+func TestMultiTransport_readUnavailableAndDrift(t *testing.T) {
+	servers := readServers(`{"ip-address": "10.0.0.1"}`, `{}`, `{"ip-address": "10.0.0.2"}`)
+	servers[1] = unreachable()
+	var drifts []kea.Drift
+	ctx := kea.WithDriftReporter(context.Background(), func(d kea.Drift) { drifts = append(drifts, d) })
+
+	if _, err := execRead(ctx, multi(servers...)); err != nil {
+		t.Fatal(err)
+	}
+	if len(drifts) != 2 {
+		t.Fatalf("drifts: %v", drifts)
+	}
+	if drifts[0] != (kea.Drift{Server: "c", Command: "reservation-get"}) {
+		t.Fatalf("drift: %v", drifts[0])
+	}
+	if drifts[1].Server != "b" || !drifts[1].Unavailable() {
+		t.Fatalf("unavailable: %v", drifts[1])
+	}
+}
+
+func TestMultiTransport_readNoServerAnswers(t *testing.T) {
+	_, err := execRead(context.Background(), multi(unreachable(), unreachable()))
+
+	var unavailable *kea.UnavailableError
+	if !errors.As(err, &unavailable) {
+		t.Fatalf("expected UnavailableError, got %v", err)
+	}
+	want := "reservation-get failed on every server: a: dial tcp: connection refused; b: dial tcp: connection refused"
+	if err.Error() != want {
+		t.Fatalf("expected %q, got %q", want, err.Error())
+	}
+}
+
+func TestMultiTransport_strictReadUnavailable(t *testing.T) {
+	servers := readServers(`{"ip-address": "10.0.0.1"}`, `{}`)
+	servers[1] = unreachable()
+	trans := multi(servers...)
+	trans.Strict = true
+
+	_, err := execRead(context.Background(), trans)
+
+	var drift *kea.DriftError
+	if !errors.As(err, &drift) {
+		t.Fatalf("expected DriftError, got %v", err)
+	}
+	want := "servers out of sync: b did not answer reservation-get: dial tcp: connection refused"
+	if err.Error() != want {
+		t.Fatalf("expected %q, got %q", want, err.Error())
+	}
+}
+
 func TestMultiTransport_readError(t *testing.T) {
 	a := readServers(`{"ip-address": "10.0.0.1"}`)[0]
-	b := &fakeServer{err: errors.New("connection refused")}
+	b := &fakeServer{err: errors.New("http status: 401")}
 
 	_, err := execRead(context.Background(), multi(a, b))
 
-	want := "b: connection refused"
+	want := "b: http status: 401"
 	if err == nil || err.Error() != want {
 		t.Fatalf("expected %q, got %v", want, err)
 	}

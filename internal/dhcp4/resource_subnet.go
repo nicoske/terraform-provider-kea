@@ -105,34 +105,39 @@ func (r *SubnetResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			},
 
 			"valid_lifetime": schema.Int64Attribute{
-				Description: "Lease lifetime in seconds. Defaults to the value derived from the global configuration.",
-				Optional:    true,
-				Computed:    true,
-				Validators:  []validator.Int64{int64validator.Between(0, math.MaxUint32)},
+				Description:   "Lease lifetime in seconds. Defaults to the value derived from the global configuration.",
+				Optional:      true,
+				Computed:      true,
+				Validators:    []validator.Int64{int64validator.Between(0, math.MaxUint32)},
+				PlanModifiers: []planmodifier.Int64{derivedTimerModifier{}},
 			},
 			"min_valid_lifetime": schema.Int64Attribute{
-				Description: "Minimum lease lifetime in seconds a client may request. Defaults to `valid_lifetime`.",
-				Optional:    true,
-				Computed:    true,
-				Validators:  []validator.Int64{int64validator.Between(0, math.MaxUint32)},
+				Description:   "Minimum lease lifetime in seconds a client may request. Defaults to `valid_lifetime`.",
+				Optional:      true,
+				Computed:      true,
+				Validators:    []validator.Int64{int64validator.Between(0, math.MaxUint32)},
+				PlanModifiers: []planmodifier.Int64{derivedTimerModifier{}},
 			},
 			"max_valid_lifetime": schema.Int64Attribute{
-				Description: "Maximum lease lifetime in seconds a client may request. Defaults to `valid_lifetime`.",
-				Optional:    true,
-				Computed:    true,
-				Validators:  []validator.Int64{int64validator.Between(0, math.MaxUint32)},
+				Description:   "Maximum lease lifetime in seconds a client may request. Defaults to `valid_lifetime`.",
+				Optional:      true,
+				Computed:      true,
+				Validators:    []validator.Int64{int64validator.Between(0, math.MaxUint32)},
+				PlanModifiers: []planmodifier.Int64{derivedTimerModifier{}},
 			},
 			"renew_timer": schema.Int64Attribute{
-				Description: "T1 timer in seconds (Option 58). Defaults to the value derived from the global configuration.",
-				Optional:    true,
-				Computed:    true,
-				Validators:  []validator.Int64{int64validator.Between(0, math.MaxUint32)},
+				Description:   "T1 timer in seconds (Option 58). Defaults to the value derived from the global configuration.",
+				Optional:      true,
+				Computed:      true,
+				Validators:    []validator.Int64{int64validator.Between(0, math.MaxUint32)},
+				PlanModifiers: []planmodifier.Int64{derivedTimerModifier{}},
 			},
 			"rebind_timer": schema.Int64Attribute{
-				Description: "T2 timer in seconds (Option 59). Defaults to the value derived from the global configuration.",
-				Optional:    true,
-				Computed:    true,
-				Validators:  []validator.Int64{int64validator.Between(0, math.MaxUint32)},
+				Description:   "T2 timer in seconds (Option 59). Defaults to the value derived from the global configuration.",
+				Optional:      true,
+				Computed:      true,
+				Validators:    []validator.Int64{int64validator.Between(0, math.MaxUint32)},
+				PlanModifiers: []planmodifier.Int64{derivedTimerModifier{}},
 			},
 
 			"reservations_global": schema.BoolAttribute{
@@ -247,9 +252,13 @@ func (r *SubnetResource) Create(ctx context.Context, req resource.CreateRequest,
 	var data SubnetResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	var config SubnetResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	configured := config.configuredTimers()
+	data.clearDerivedTimers(configured)
 
 	subnet, diags := data.ToAPI(ctx)
 	resp.Diagnostics.Append(diags...)
@@ -276,6 +285,7 @@ func (r *SubnetResource) Create(ctx context.Context, req resource.CreateRequest,
 	resp.Diagnostics.Append(data.FromAPI(ctx, created)...)
 	data.InSync = types.BoolValue(true)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(setConfiguredTimers(ctx, resp.Private, configured)...)
 }
 
 func (r *SubnetResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -309,9 +319,13 @@ func (r *SubnetResource) Update(ctx context.Context, req resource.UpdateRequest,
 	var data SubnetResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	var config SubnetResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	configured := config.configuredTimers()
+	data.clearDerivedTimers(configured)
 
 	subnet, diags := data.ToAPI(ctx)
 	resp.Diagnostics.Append(diags...)
@@ -338,6 +352,7 @@ func (r *SubnetResource) Update(ctx context.Context, req resource.UpdateRequest,
 	resp.Diagnostics.Append(data.FromAPI(ctx, updated)...)
 	data.InSync = types.BoolValue(true)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(setConfiguredTimers(ctx, resp.Private, configured)...)
 }
 
 func (r *SubnetResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

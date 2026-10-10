@@ -13,13 +13,29 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework-nettypes/hwtypes"
 	"github.com/hashicorp/terraform-plugin-framework-nettypes/iptypes"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/wfdewith/terraform-provider-kea/internal/keatypes"
 	"github.com/wfdewith/terraform-provider-kea/kea"
 	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
 	"github.com/wfdewith/terraform-provider-kea/kea/keaquery"
 )
+
+var operationTargets = []kea.OperationTarget{
+	kea.OperationTargetDatabase,
+	kea.OperationTargetMemory,
+	kea.OperationTargetAll,
+}
+
+func operationTargetValidator() validator.String {
+	values := make([]string, len(operationTargets))
+	for i, t := range operationTargets {
+		values[i] = string(t)
+	}
+	return stringvalidator.OneOf(values...)
+}
 
 type ReservationModel struct {
 	ID             types.String         `tfsdk:"id"`
@@ -37,6 +53,8 @@ type ReservationModel struct {
 	ServerHostname types.String         `tfsdk:"server_hostname"`
 	OptionData     types.Set            `tfsdk:"option_data"`
 	UserContext    jsontypes.Normalized `tfsdk:"user_context"`
+
+	OperationTarget types.String `tfsdk:"operation_target"`
 }
 
 type OptionDataModel struct {
@@ -146,6 +164,13 @@ func (m *ReservationModel) FromAPI(ctx context.Context, r *keadhcp4.Reservation)
 	m.ID = types.StringValue(m.ComputeID())
 
 	return diags
+}
+
+func (m *ReservationModel) Target(fallback kea.OperationTarget) kea.OperationTarget {
+	if m.OperationTarget.IsNull() || m.OperationTarget.IsUnknown() {
+		return fallback
+	}
+	return kea.OperationTarget(m.OperationTarget.ValueString())
 }
 
 func (m *ReservationModel) BuildQuery() keaquery.ReservationQuery {

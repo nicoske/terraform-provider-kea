@@ -92,6 +92,7 @@ output "device_location" {
 - `flex_id` (String) Flexible identifier from the `flex_id` hook library. Mutually exclusive with other identifier types.
 - `hw_address` (String) Hardware (MAC) address to identify the client. Mutually exclusive with other identifier types.
 - `ip_address` (String) Reserved IPv4 address. Can be used to query for a reservation by IP address. Mutually exclusive with other identifier types.
+- `operation_target` (String) Where Kea looks for the reservation: `database` for the hosts database, `memory` for the running server configuration, or `all` (default) for both.
 
 ### Read-Only
 

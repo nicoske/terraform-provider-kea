@@ -112,6 +112,15 @@ func (d *ReservationDataSource) Schema(ctx context.Context, req datasource.Schem
 				Computed:    true,
 				CustomType:  jsontypes.NormalizedType{},
 			},
+			"operation_target": schema.StringAttribute{
+				Description: "Where Kea looks for the reservation: `database` for the hosts database, " +
+					"`memory` for the running server configuration, or `all` (default) for both.",
+				Optional: true,
+				Computed: true,
+				Validators: []validator.String{
+					operationTargetValidator(),
+				},
+			},
 			"option_data": schema.SetNestedAttribute{
 				Description: "DHCP options configured for this reservation.",
 				Computed:    true,
@@ -197,7 +206,10 @@ func (d *ReservationDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	reservation, err := d.client.GetReservation(ctx, kea.OperationTargetAll, data.BuildQuery())
+	target := data.Target(kea.OperationTargetAll)
+	data.OperationTarget = types.StringValue(string(target))
+
+	reservation, err := d.client.GetReservation(ctx, target, data.BuildQuery())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Reservation", err.Error())
 		return

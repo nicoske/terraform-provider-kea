@@ -43,4 +43,4 @@ services:
         - http://127.0.0.1:8000/
       interval: 30s
       timeout: 5s
-      start_period: 60s
+      start_period: 120s

@@ -53,6 +53,7 @@ jobs:
         run: echo "kea=$(jq -c . testing/kea-matrix.json)" >> "$GITHUB_OUTPUT"
 
   test:
+    name: test (Go ${{ matrix.go }}, Kea ${{ matrix.kea.version }})
     needs: kea-matrix
     runs-on: ubuntu-24.04
     strategy:

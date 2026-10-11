@@ -52,6 +52,24 @@ func ExecWithResponse[T any](ctx context.Context, trans Transport, command strin
 	return &result, nil
 }
 
+func ExecWithTextResponse(ctx context.Context, trans Transport, command string, arguments any) (string, error) {
+	req, err := newCommand(command, arguments)
+	if err != nil {
+		return "", err
+	}
+
+	var resp CommandResponse
+	if err := roundTrip(ctx, trans, req, &resp); err != nil {
+		return "", err
+	}
+
+	if resp.Result == ResultEmpty {
+		return "", nil
+	}
+
+	return resp.Text, nil
+}
+
 func Exec(ctx context.Context, trans Transport, command string, arguments any) error {
 	req, err := newCommand(command, arguments)
 	if err != nil {

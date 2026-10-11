@@ -5,6 +5,7 @@ TF_LOG ?= error
 KEA_DHCP4_ADDRESS ?= http://localhost:8000
 KEA_DHCP4_HTTP_USERNAME ?=
 KEA_DHCP4_HTTP_PASSWORD ?=
+KEA_DHCP4_TLS_ADDRESS ?= https://localhost:8443
 
 KEA_MATRIX_FILE := testing/kea-matrix.json
 KEA_TEST_VERSIONS ?= $(shell jq -r '.[].version' $(KEA_MATRIX_FILE))
@@ -24,6 +25,7 @@ testacc:
 	KEA_DHCP4_ADDRESS=$(KEA_DHCP4_ADDRESS) \
 	KEA_DHCP4_HTTP_USERNAME=$(KEA_DHCP4_HTTP_USERNAME) \
 	KEA_DHCP4_HTTP_PASSWORD=$(KEA_DHCP4_HTTP_PASSWORD) \
+	KEA_DHCP4_TLS_ADDRESS=$(KEA_DHCP4_TLS_ADDRESS) \
 	TF_LOG=$(TF_LOG) TF_ACC=1 \
 	$(GO) test -parallel 4 -v -race -count=1 $(TESTARGS) -timeout 60m ./internal/...
 

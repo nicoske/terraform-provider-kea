@@ -2,6 +2,10 @@ package acctest
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/hashicorp/go-version"
@@ -62,6 +66,42 @@ func ProviderConfig() string {
 	return `
 provider "kea" {}
 `
+}
+
+func ProviderConfigTLS(t *testing.T, address string) string {
+	t.Helper()
+
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("unable to locate test PKI")
+	}
+	tlsDir := filepath.Join(filepath.Dir(file), "..", "..", "testing", "tls")
+
+	return fmt.Sprintf(`
+provider "kea" {
+  dhcp4 = {
+    address     = %q
+    ca_cert     = %q
+    client_cert = %q
+    client_key  = %q
+  }
+}
+`,
+		address,
+		readPEM(t, filepath.Join(tlsDir, "ca.pem")),
+		readPEM(t, filepath.Join(tlsDir, "client.pem")),
+		readPEM(t, filepath.Join(tlsDir, "client-key.pem")),
+	)
+}
+
+func readPEM(t *testing.T, path string) string {
+	t.Helper()
+
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("unable to read %s: %v", path, err)
+	}
+	return string(contents)
 }
 
 // Static reservations defined in testing/kea-dhcp4.conf

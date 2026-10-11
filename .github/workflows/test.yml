@@ -86,6 +86,10 @@ jobs:
 
       - run: make testacc
 
+      - name: Show Kea server logs
+        if: failure()
+        run: docker compose --file testing/docker-compose.yml logs --no-color --tail 500
+
   lint:
     runs-on: ubuntu-24.04
     steps:

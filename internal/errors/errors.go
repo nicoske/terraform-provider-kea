@@ -29,3 +29,27 @@ func NewUnconfiguredClientError(client string) diag.Diagnostic {
 		),
 	)
 }
+
+func NewKeaVersionError(err error) diag.Diagnostic {
+	return diag.NewErrorDiagnostic(
+		"Error Determining Kea Version",
+		fmt.Sprintf(
+			"Unable to determine the Kea server version: %s. "+
+				"The version is required to validate this configuration.",
+			err,
+		),
+	)
+}
+
+func NewUnsupportedFeatureError(feature, minVersion, serverVersion string) diag.Diagnostic {
+	return diag.NewErrorDiagnostic(
+		"Unsupported Kea Version",
+		fmt.Sprintf(
+			"The %s attribute requires Kea %s or newer; the server reports %s. "+
+				"Upgrade Kea or remove the attribute.",
+			feature,
+			minVersion,
+			serverVersion,
+		),
+	)
+}

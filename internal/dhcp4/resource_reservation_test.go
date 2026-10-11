@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
 	"regexp"
 	"testing"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/wfdewith/terraform-provider-kea/internal/acctest"
 	"github.com/wfdewith/terraform-provider-kea/kea"
-	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
 	"github.com/wfdewith/terraform-provider-kea/kea/keaquery"
 )
 
@@ -23,7 +21,6 @@ func TestAccReservation_basic(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -46,7 +43,6 @@ func TestAccReservation_withClientID(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "client-id", clientID)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -69,7 +65,6 @@ func TestAccReservation_withCircuitID(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "circuit-id", circuitID)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -92,7 +87,6 @@ func TestAccReservation_withDUID(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "duid", duid)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -115,7 +109,6 @@ func TestAccReservation_withFlexID(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "flex-id", flexID)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -139,7 +132,6 @@ func TestAccReservation_withHostname(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -162,7 +154,6 @@ func TestAccReservation_withOptionData(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -186,7 +177,6 @@ func TestAccReservation_withUserContext(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -209,7 +199,6 @@ func TestAccReservation_global(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(0, "hw-address", mac)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -232,7 +221,6 @@ func TestAccReservation_destroy(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -257,7 +245,6 @@ func TestAccReservation_disappears(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -285,7 +272,6 @@ func TestAccReservation_update(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -360,7 +346,6 @@ func TestAccReservation_changeIdentity(t *testing.T) {
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:                 func() { acctest.PreCheck(t) },
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
@@ -384,7 +369,6 @@ func TestAccReservation_reorderSetsNoUpdate(t *testing.T) {
 	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -411,9 +395,10 @@ func TestAccReservation_reorderSetsNoUpdate(t *testing.T) {
 
 func TestAccReservation_optionDataNormalization(t *testing.T) {
 	testCases := map[string]struct {
-		mac    string
-		ip     string
-		blocks []string
+		mac        string
+		ip         string
+		blocks     []string
+		minVersion string
 	}{
 		"non_canonical_hex": {
 			mac: "02:11:22:33:88:01",
@@ -518,7 +503,11 @@ func TestAccReservation_optionDataNormalization(t *testing.T) {
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:                 func() { acctest.PreCheck(t) },
+				PreCheck: func() {
+					if tc.minVersion != "" {
+						acctest.SkipUnlessKeaVersion(t, ">= "+tc.minVersion)
+					}
+				},
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 				Steps:                    optionDataSteps(1, tc.mac, tc.ip, tc.blocks...),
 			})
@@ -570,7 +559,6 @@ func TestAccReservation_optionDataSameBytes(t *testing.T) {
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:                 func() { acctest.PreCheck(t) },
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 				Steps:                    optionDataSteps(1, tc.mac, tc.ip, tc.blocks),
 			})
@@ -592,7 +580,6 @@ func TestAccReservation_optionDataSameBytesMany(t *testing.T) {
 
 		t.Run(fmt.Sprint(rot), func(t *testing.T) {
 			resource.Test(t, resource.TestCase{
-				PreCheck:                 func() { acctest.PreCheck(t) },
 				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 				Steps:                    optionDataSteps(1, macs[rot], ips[rot], blocks),
 			})
@@ -605,7 +592,6 @@ func TestAccReservation_optionDataRespell(t *testing.T) {
 	ip := "10.67.0.229"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{Config: testAccReservationConfig_withOptionDataBlocks(1, mac, ip, `option_data {
@@ -658,7 +644,6 @@ func TestAccReservation_optionDataUnresolvedRespell(t *testing.T) {
 	ip := "10.67.0.230"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{Config: testAccReservationConfig_withOptionDataBlocks(1, mac, ip, `option_data {
@@ -693,7 +678,6 @@ func TestAccReservation_optionDataInvalidAtPlan(t *testing.T) {
 	ip := "10.67.0.231"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{{
 			Config: testAccReservationConfig_withOptionDataBlocks(1, mac, ip, `option_data {
@@ -712,7 +696,6 @@ func TestAccReservation_optionDataCSVForUndefinedFails(t *testing.T) {
 	ip := "10.67.0.232"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{{
 			Config: testAccReservationConfig_withOptionDataBlocks(1, mac, ip, `option_data {
@@ -725,18 +708,9 @@ func TestAccReservation_optionDataCSVForUndefinedFails(t *testing.T) {
 	})
 }
 
-func testAccKeaClient() *keadhcp4.Client {
-	transport := &kea.HTTPTransport{
-		Endpoint: os.Getenv("KEA_DHCP4_ADDRESS"),
-		Username: os.Getenv("KEA_DHCP4_HTTP_USERNAME"),
-		Password: os.Getenv("KEA_DHCP4_HTTP_PASSWORD"),
-	}
-	return keadhcp4.NewClient(transport)
-}
-
 func testAccCheckReservationExists(t *testing.T, query keaquery.ReservationQuery) func() {
 	return func() {
-		client := testAccKeaClient()
+		client := acctest.NewClient(t)
 
 		reservation, err := client.GetReservation(context.Background(), kea.OperationTargetDatabase, query)
 		if err != nil {
@@ -751,7 +725,7 @@ func testAccCheckReservationExists(t *testing.T, query keaquery.ReservationQuery
 
 func testAccCheckReservationDestroyed(t *testing.T, query keaquery.ReservationQuery) func() {
 	return func() {
-		client := testAccKeaClient()
+		client := acctest.NewClient(t)
 
 		reservation, err := client.GetReservation(context.Background(), kea.OperationTargetDatabase, query)
 		if err != nil {
@@ -773,7 +747,7 @@ func testAccCheckReservationReplaced(t *testing.T, before, after keaquery.Reserv
 
 func testAccDeleteReservation(t *testing.T, query keaquery.ReservationQuery) func() {
 	return func() {
-		client := testAccKeaClient()
+		client := acctest.NewClient(t)
 		if err := client.DeleteReservation(context.Background(), kea.OperationTargetDatabase, query); err != nil {
 			t.Fatalf("failed to delete reservation: %v", err)
 		}

@@ -14,7 +14,6 @@ func TestAccReservationDataSource_basic(t *testing.T) {
 	resourceName := "data.kea_dhcp4_reservation.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -35,7 +34,6 @@ func TestAccReservationDataSource_withClientID(t *testing.T) {
 	resourceName := "data.kea_dhcp4_reservation.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -56,7 +54,6 @@ func TestAccReservationDataSource_withCircuitID(t *testing.T) {
 	resourceName := "data.kea_dhcp4_reservation.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -77,7 +74,6 @@ func TestAccReservationDataSource_withDUID(t *testing.T) {
 	resourceName := "data.kea_dhcp4_reservation.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -98,7 +94,6 @@ func TestAccReservationDataSource_withFlexID(t *testing.T) {
 	resourceName := "data.kea_dhcp4_reservation.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -120,7 +115,6 @@ func TestAccReservationDataSource_withHostname(t *testing.T) {
 	resourceName := "data.kea_dhcp4_reservation.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -141,7 +135,6 @@ func TestAccReservationDataSource_global(t *testing.T) {
 	resourceName := "data.kea_dhcp4_reservation.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -163,7 +156,6 @@ func TestAccReservationDataSource_byIP(t *testing.T) {
 	resourceName := "data.kea_dhcp4_reservation.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -184,7 +176,6 @@ func TestAccReservationDataSource_staticByHWAddress(t *testing.T) {
 	resourceName := "data.kea_dhcp4_reservation.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -203,7 +194,6 @@ func TestAccReservationDataSource_staticByIP(t *testing.T) {
 	resourceName := "data.kea_dhcp4_reservation.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -222,7 +212,6 @@ func TestAccReservationDataSource_staticGlobal(t *testing.T) {
 	resourceName := "data.kea_dhcp4_reservation.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{

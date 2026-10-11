@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/wfdewith/terraform-provider-kea/internal/capabilities"
 	"github.com/wfdewith/terraform-provider-kea/internal/clients"
 	"github.com/wfdewith/terraform-provider-kea/internal/errors"
 	"github.com/wfdewith/terraform-provider-kea/internal/keatypes"
@@ -28,6 +29,7 @@ import (
 
 var _ resource.ResourceWithConfigure = (*ReservationResource)(nil)
 var _ resource.ResourceWithConfigValidators = (*ReservationResource)(nil)
+var _ resource.ResourceWithModifyPlan = (*ReservationResource)(nil)
 
 type ReservationResource struct {
 	client *keadhcp4.Client
@@ -228,10 +230,30 @@ func (r *ReservationResource) Configure(ctx context.Context, req resource.Config
 	r.client = keaClients.DHCP4
 }
 
+func (r *ReservationResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var data ReservationModel
+
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	capabilities.Check(ctx, r.client, &data, &resp.Diagnostics)
+}
+
 func (r *ReservationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data ReservationModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	capabilities.Check(ctx, r.client, &data, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -289,6 +311,11 @@ func (r *ReservationResource) Update(ctx context.Context, req resource.UpdateReq
 	var data ReservationModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	capabilities.Check(ctx, r.client, &data, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}

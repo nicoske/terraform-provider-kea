@@ -1,12 +1,14 @@
 package acctest
 
 import (
-	"os"
+	"context"
 	"testing"
 
+	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/wfdewith/terraform-provider-kea/internal/provider"
+	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
 )
 
 // ProtoV6ProviderFactories is used to instantiate a provider during
@@ -17,14 +19,42 @@ var ProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, erro
 	"kea": providerserver.NewProtocol6WithError(provider.New("test")()),
 }
 
-// PreCheck validates required environment variables before running acceptance tests.
-// Assumes the Kea server is configured with testing/kea-dhcp4.conf.
-func PreCheck(t *testing.T) {
+func NewClient(t *testing.T) *keadhcp4.Client {
 	t.Helper()
 
-	address := os.Getenv("KEA_DHCP4_ADDRESS")
-	if address == "" {
+	client, err := provider.NewDHCP4ClientFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client == nil {
 		t.Fatal("KEA_DHCP4_ADDRESS must be set for acceptance tests")
+	}
+
+	return client
+}
+
+func KeaVersion(t *testing.T) *version.Version {
+	t.Helper()
+
+	serverVersion, err := NewClient(t).Version(context.Background())
+	if err != nil {
+		t.Fatalf("unable to determine Kea server version: %v", err)
+	}
+
+	return serverVersion
+}
+
+func SkipUnlessKeaVersion(t *testing.T, constraint string) {
+	t.Helper()
+
+	constraints, err := version.NewConstraint(constraint)
+	if err != nil {
+		t.Fatalf("invalid version constraint %q: %v", constraint, err)
+	}
+
+	serverVersion := KeaVersion(t)
+	if !constraints.Check(serverVersion) {
+		t.Skipf("requires Kea %s, server is %s", constraint, serverVersion)
 	}
 }
 

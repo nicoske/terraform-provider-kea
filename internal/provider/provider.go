@@ -156,7 +156,11 @@ func configureDHCP4Client(data *KeaProviderClientModel) (*keadhcp4.Client, error
 	return client, nil
 }
 
-func newKeaTransport(uri, http_username, http_password string) (kea.Transport, error) {
+func NewDHCP4ClientFromEnv() (*keadhcp4.Client, error) {
+	return configureDHCP4Client(nil)
+}
+
+func newKeaTransport(uri, httpUsername, httpPassword string) (kea.Transport, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
@@ -168,8 +172,8 @@ func newKeaTransport(uri, http_username, http_password string) (kea.Transport, e
 	case "http", "https":
 		return &kea.HTTPTransport{
 			Endpoint: uri,
-			Username: http_username,
-			Password: http_password,
+			Username: httpUsername,
+			Password: httpPassword,
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported scheme: %s", u.Scheme)

@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-nettypes/iptypes"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/wfdewith/terraform-provider-kea/internal/capabilities"
 	"github.com/wfdewith/terraform-provider-kea/internal/keatypes"
 	"github.com/wfdewith/terraform-provider-kea/kea"
 	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
@@ -142,6 +143,13 @@ func (m *ReservationModel) FromAPI(ctx context.Context, r *keadhcp4.Reservation)
 	m.ID = types.StringValue(m.ComputeID())
 
 	return diags
+}
+
+func (m *ReservationModel) RequiredFeatures(ctx context.Context) ([]capabilities.Feature, diag.Diagnostics) {
+	var features []capabilities.Feature
+	var diags diag.Diagnostics
+
+	return features, diags
 }
 
 func (m *ReservationModel) BuildQuery() keaquery.ReservationQuery {

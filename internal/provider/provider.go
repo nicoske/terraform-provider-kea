@@ -2,9 +2,13 @@ package provider
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -28,9 +32,13 @@ type KeaProviderModel struct {
 }
 
 type KeaProviderClientModel struct {
-	Address      types.String `tfsdk:"address"`
-	HTTPUsername types.String `tfsdk:"http_username"`
-	HTTPPassword types.String `tfsdk:"http_password"`
+	Address       types.String `tfsdk:"address"`
+	HTTPUsername  types.String `tfsdk:"http_username"`
+	HTTPPassword  types.String `tfsdk:"http_password"`
+	CACert        types.String `tfsdk:"ca_cert"`
+	ClientCert    types.String `tfsdk:"client_cert"`
+	ClientKey     types.String `tfsdk:"client_key"`
+	SkipTLSVerify types.Bool   `tfsdk:"skip_tls_verify"`
 }
 
 func New(version string) func() provider.Provider {
@@ -69,6 +77,28 @@ func (p *KeaProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 						Optional:    true,
 						Sensitive:   true,
 						Description: "Password for HTTP basic authentication. Falls back to `KEA_DHCP4_HTTP_PASSWORD` environment variable.",
+					},
+					"ca_cert": schema.StringAttribute{
+						Optional: true,
+						Description: "PEM-encoded CA certificate bundle used to verify the Kea server's TLS certificate. " +
+							"Only applies to `https://` addresses. Falls back to `KEA_DHCP4_CA_CERT` environment variable.",
+					},
+					"client_cert": schema.StringAttribute{
+						Optional: true,
+						Description: "PEM-encoded client certificate presented to the Kea server for mutual TLS. " +
+							"Requires `client_key` and only applies to `https://` addresses. " +
+							"Falls back to `KEA_DHCP4_CLIENT_CERT` environment variable.",
+					},
+					"client_key": schema.StringAttribute{
+						Optional:    true,
+						Sensitive:   true,
+						Description: "PEM-encoded private key for `client_cert`. Falls back to `KEA_DHCP4_CLIENT_KEY` environment variable.",
+					},
+					"skip_tls_verify": schema.BoolAttribute{
+						Optional: true,
+						Description: "Skip verification of the Kea server's TLS certificate. " +
+							"Only applies to `https://` addresses. " +
+							"Falls back to `KEA_DHCP4_SKIP_TLS_VERIFY` environment variable.",
 					},
 				},
 			},
@@ -121,33 +151,33 @@ func (p *KeaProvider) DataSources(_ context.Context) []func() datasource.DataSou
 }
 
 func configureDHCP4Client(data *KeaProviderClientModel) (*keadhcp4.Client, error) {
-	var address string
-	if data != nil && !data.Address.IsNull() && !data.Address.IsUnknown() {
-		address = data.Address.ValueString()
-	} else if s, ok := os.LookupEnv("KEA_DHCP4_ADDRESS"); ok {
-		address = s
+	if data == nil {
+		data = &KeaProviderClientModel{}
 	}
+
+	address := envString(data.Address, "KEA_DHCP4_ADDRESS")
 
 	// No address configured - skip DHCP4 client setup
 	if address == "" {
 		return nil, nil
 	}
 
-	var http_username string
-	if data != nil && !data.HTTPUsername.IsNull() && !data.HTTPUsername.IsUnknown() {
-		http_username = data.HTTPUsername.ValueString()
-	} else if s, ok := os.LookupEnv("KEA_DHCP4_HTTP_USERNAME"); ok {
-		http_username = s
+	skipTLSVerify, err := envBool(data.SkipTLSVerify, "KEA_DHCP4_SKIP_TLS_VERIFY")
+	if err != nil {
+		return nil, err
 	}
 
-	var http_password string
-	if data != nil && !data.HTTPPassword.IsNull() && !data.HTTPPassword.IsUnknown() {
-		http_password = data.HTTPPassword.ValueString()
-	} else if s, ok := os.LookupEnv("KEA_DHCP4_HTTP_PASSWORD"); ok {
-		http_password = s
-	}
-
-	transport, err := newKeaTransport(address, http_username, http_password)
+	transport, err := newKeaTransport(
+		address,
+		envString(data.HTTPUsername, "KEA_DHCP4_HTTP_USERNAME"),
+		envString(data.HTTPPassword, "KEA_DHCP4_HTTP_PASSWORD"),
+		tlsOptions{
+			CACert:        envString(data.CACert, "KEA_DHCP4_CA_CERT"),
+			ClientCert:    envString(data.ClientCert, "KEA_DHCP4_CLIENT_CERT"),
+			ClientKey:     envString(data.ClientKey, "KEA_DHCP4_CLIENT_KEY"),
+			SkipTLSVerify: skipTLSVerify,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +190,38 @@ func NewDHCP4ClientFromEnv() (*keadhcp4.Client, error) {
 	return configureDHCP4Client(nil)
 }
 
-func newKeaTransport(uri, httpUsername, httpPassword string) (kea.Transport, error) {
+func envString(value types.String, name string) string {
+	if !value.IsNull() && !value.IsUnknown() {
+		return value.ValueString()
+	}
+	return os.Getenv(name)
+}
+
+func envBool(value types.Bool, name string) (bool, error) {
+	if !value.IsNull() && !value.IsUnknown() {
+		return value.ValueBool(), nil
+	}
+
+	s, ok := os.LookupEnv(name)
+	if !ok || s == "" {
+		return false, nil
+	}
+
+	v, err := strconv.ParseBool(s)
+	if err != nil {
+		return false, fmt.Errorf("invalid value for %s: %w", name, err)
+	}
+	return v, nil
+}
+
+type tlsOptions struct {
+	CACert        string
+	ClientCert    string
+	ClientKey     string
+	SkipTLSVerify bool
+}
+
+func newKeaTransport(uri, httpUsername, httpPassword string, tlsOpts tlsOptions) (kea.Transport, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
@@ -169,13 +230,60 @@ func newKeaTransport(uri, httpUsername, httpPassword string) (kea.Transport, err
 	switch u.Scheme {
 	case "unix":
 		return &kea.UnixTransport{SocketPath: u.Path}, nil
-	case "http", "https":
+	case "http":
 		return &kea.HTTPTransport{
 			Endpoint: uri,
 			Username: httpUsername,
 			Password: httpPassword,
 		}, nil
+	case "https":
+		tlsConfig, err := newTLSConfig(tlsOpts)
+		if err != nil {
+			return nil, err
+		}
+
+		httpTransport := http.DefaultTransport.(*http.Transport).Clone()
+		httpTransport.TLSClientConfig = tlsConfig
+
+		return &kea.HTTPTransport{
+			Endpoint: uri,
+			Username: httpUsername,
+			Password: httpPassword,
+			Client:   &http.Client{Transport: httpTransport},
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported scheme: %s", u.Scheme)
 	}
+}
+
+func newTLSConfig(opts tlsOptions) (*tls.Config, error) {
+	config := &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: opts.SkipTLSVerify, //nolint:gosec
+	}
+
+	if opts.CACert != "" {
+		pool, err := x509.SystemCertPool()
+		if err != nil || pool == nil {
+			pool = x509.NewCertPool()
+		}
+		if !pool.AppendCertsFromPEM([]byte(opts.CACert)) {
+			return nil, fmt.Errorf("failed to parse ca_cert: no PEM-encoded certificates found")
+		}
+		config.RootCAs = pool
+	}
+
+	if opts.ClientCert != "" || opts.ClientKey != "" {
+		if opts.ClientCert == "" || opts.ClientKey == "" {
+			return nil, fmt.Errorf("client_cert and client_key must be set together")
+		}
+
+		cert, err := tls.X509KeyPair([]byte(opts.ClientCert), []byte(opts.ClientKey))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse client certificate: %w", err)
+		}
+		config.Certificates = []tls.Certificate{cert}
+	}
+
+	return config, nil
 }

@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"strings"
 )
 
 var _ Transport = &UnixTransport{}
@@ -80,6 +82,10 @@ func (t *HTTPTransport) Send(ctx context.Context, req CommandRequest, resp *Comm
 	defer func() { _ = hResp.Body.Close() }()
 
 	if hResp.StatusCode >= 400 {
+		body, _ := io.ReadAll(io.LimitReader(hResp.Body, 1024))
+		if msg := strings.TrimSpace(string(body)); msg != "" {
+			return fmt.Errorf("http status %d: %s", hResp.StatusCode, msg)
+		}
 		return fmt.Errorf("http status: %d", hResp.StatusCode)
 	}
 

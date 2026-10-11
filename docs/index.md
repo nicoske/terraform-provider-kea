@@ -28,6 +28,16 @@ provider "kea" {
   }
 }
 
+# Configure via HTTPS with a private CA and mutual TLS
+provider "kea" {
+  dhcp4 = {
+    address     = "https://192.0.2.1:8004"
+    ca_cert     = file("${path.module}/certs/ca.pem")
+    client_cert = file("${path.module}/certs/client.pem")
+    client_key  = file("${path.module}/certs/client-key.pem")
+  }
+}
+
 # Configure via environment variables
 # export KEA_DHCP4_ADDRESS="http://192.0.2.1:8000"
 # export KEA_DHCP4_HTTP_USERNAME="admin"
@@ -49,5 +59,9 @@ provider "kea" {
 Optional:
 
 - `address` (String) Control channel address: `unix:///path/to/socket` or `http(s)://host:port`. Falls back to `KEA_DHCP4_ADDRESS` environment variable.
+- `ca_cert` (String) PEM-encoded CA certificate bundle used to verify the Kea server's TLS certificate. Only applies to `https://` addresses. Falls back to `KEA_DHCP4_CA_CERT` environment variable.
+- `client_cert` (String) PEM-encoded client certificate presented to the Kea server for mutual TLS. Requires `client_key` and only applies to `https://` addresses. Falls back to `KEA_DHCP4_CLIENT_CERT` environment variable.
+- `client_key` (String, Sensitive) PEM-encoded private key for `client_cert`. Falls back to `KEA_DHCP4_CLIENT_KEY` environment variable.
 - `http_password` (String, Sensitive) Password for HTTP basic authentication. Falls back to `KEA_DHCP4_HTTP_PASSWORD` environment variable.
 - `http_username` (String) Username for HTTP basic authentication. Falls back to `KEA_DHCP4_HTTP_USERNAME` environment variable.
+- `skip_tls_verify` (Boolean) Skip verification of the Kea server's TLS certificate. Only applies to `https://` addresses. Falls back to `KEA_DHCP4_SKIP_TLS_VERIFY` environment variable.

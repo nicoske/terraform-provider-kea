@@ -149,7 +149,31 @@ func (m *ReservationModel) RequiredFeatures(ctx context.Context) ([]capabilities
 	var features []capabilities.Feature
 	var diags diag.Diagnostics
 
+	if optionDataUsesClientClasses(ctx, m, &diags) {
+		features = append(features, capabilities.OptionDataClientClasses)
+	}
+
 	return features, diags
+}
+
+func optionDataUsesClientClasses(ctx context.Context, m *ReservationModel, diags *diag.Diagnostics) bool {
+	if m.OptionData.IsNull() || m.OptionData.IsUnknown() {
+		return false
+	}
+
+	var options []OptionDataModel
+	diags.Append(m.OptionData.ElementsAs(ctx, &options, false)...)
+	if diags.HasError() {
+		return false
+	}
+
+	for _, option := range options {
+		if !option.ClientClasses.IsNull() && !option.ClientClasses.IsUnknown() && len(option.ClientClasses.Elements()) > 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (m *ReservationModel) BuildQuery() keaquery.ReservationQuery {

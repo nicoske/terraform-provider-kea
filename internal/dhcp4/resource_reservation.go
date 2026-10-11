@@ -181,7 +181,8 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 							Computed:    true,
 						},
 						"client_classes": schema.SetAttribute{
-							Description: "Only send this option to clients in these classes.",
+							Description: "Only send this option to clients in these classes. " +
+								"Requires Kea 3.1.0 or newer.",
 							Optional:    true,
 							ElementType: types.StringType,
 						},

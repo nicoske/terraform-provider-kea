@@ -428,8 +428,9 @@ func TestAccReservation_optionDataNormalization(t *testing.T) {
   }`},
 		},
 		"duplicate_client_classes": {
-			mac: "02:11:22:33:88:03",
-			ip:  "10.67.0.222",
+			mac:        "02:11:22:33:88:03",
+			ip:         "10.67.0.222",
+			minVersion: "3.1.0",
 			blocks: []string{`option_data {
     name           = "domain-name-servers"
     data           = "0a000001"
@@ -704,6 +705,25 @@ func TestAccReservation_optionDataCSVForUndefinedFails(t *testing.T) {
     csv_format = true
   }`),
 			ExpectError: regexp.MustCompile("Error Adding Reservation"),
+		}},
+	})
+}
+
+func TestAccReservation_optionDataClientClassesUnsupported(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			acctest.SkipUnlessKeaVersion(t, "< 3.1.0")
+		},
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: testAccReservationConfig_withOptionDataBlocks(1, "02:11:22:33:88:0f", "10.67.0.241", `option_data {
+    name           = "domain-name-servers"
+    data           = "0a000001"
+    csv_format     = false
+    client_classes = ["a"]
+  }`),
+			PlanOnly:    true,
+			ExpectError: regexp.MustCompile("Unsupported Kea Version"),
 		}},
 	})
 }

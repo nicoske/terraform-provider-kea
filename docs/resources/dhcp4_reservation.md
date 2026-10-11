@@ -165,7 +165,7 @@ resource "kea_dhcp4_reservation" "monitored_device" {
 Optional:
 
 - `always_send` (Boolean) Always send this option, even if not requested by the client.
-- `client_classes` (Set of String) Only send this option to clients in these classes.
+- `client_classes` (Set of String) Only send this option to clients in these classes. Requires Kea 3.1.0 or newer.
 - `code` (Number) Option code (0-255). Required if `name` is not set.
 - `csv_format` (Boolean) When `true` (default), data is comma-separated values. When `false`, data is raw bytes as hex (`dead` or `0xdead`), colon/space-delimited octets (`de:ad` or `de ad`), or a quoted string (`'text'`).
 - `data` (String) Option value. Format depends on `csv_format`.

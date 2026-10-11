@@ -43,7 +43,17 @@ jobs:
           version: v2.18.2
           args: build --snapshot
 
+  kea-matrix:
+    runs-on: ubuntu-24.04
+    outputs:
+      kea: ${{ steps.matrix.outputs.kea }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
+      - id: matrix
+        run: echo "kea=$(jq -c . testing/kea-matrix.json)" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: kea-matrix
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -51,9 +61,12 @@ jobs:
         go:
           - oldstable
           - stable
+        kea: ${{ fromJSON(needs.kea-matrix.outputs.kea) }}
+    continue-on-error: ${{ !matrix.kea.stable }}
 
     env:
       KEA_DHCP4_ADDRESS: http://localhost:8000
+      KEA_VERSION: ${{ matrix.kea.version }}
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0

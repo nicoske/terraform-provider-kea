@@ -6,6 +6,9 @@ KEA_DHCP4_ADDRESS ?= http://localhost:8000
 KEA_DHCP4_HTTP_USERNAME ?=
 KEA_DHCP4_HTTP_PASSWORD ?=
 
+KEA_MATRIX_FILE := testing/kea-matrix.json
+KEA_TEST_VERSIONS ?= $(shell jq -r '.[].version' $(KEA_MATRIX_FILE))
+
 GO_VERSION := 1.26.0
 
 default: build
@@ -22,7 +25,10 @@ testacc:
 	KEA_DHCP4_HTTP_USERNAME=$(KEA_DHCP4_HTTP_USERNAME) \
 	KEA_DHCP4_HTTP_PASSWORD=$(KEA_DHCP4_HTTP_PASSWORD) \
 	TF_LOG=$(TF_LOG) TF_ACC=1 \
-	$(GO) test -parallel 4 -v -race $(TESTARGS) -timeout 60m ./internal/...
+	$(GO) test -parallel 4 -v -race -count=1 $(TESTARGS) -timeout 60m ./internal/...
+
+testacc-matrix:
+	@for v in $(KEA_TEST_VERSIONS); do ./testing/testacc.sh $$v || exit 1; done
 
 generate:
 	cd tools && $(GO) generate
@@ -96,4 +102,4 @@ update-gomod:
 	$(GO) get toolchain@none
 	@echo "Dependencies updated"
 
-.PHONY: build test testacc vet fmt fmt-go fmt-tf fmtcheck fmtcheck-go fmtcheck-tf generate lint static-analysis update-gomod
+.PHONY: build test testacc testacc-matrix vet fmt fmt-go fmt-tf fmtcheck fmtcheck-go fmtcheck-tf generate lint static-analysis update-gomod

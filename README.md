@@ -115,6 +115,38 @@ that Kea saves it to the file it was started with and keeps it across
 restarts. Set `config_write_filename` to write to another file in the same
 directory.
 
+### Several servers
+
+Kea high availability peers do not replicate configuration changes, so each
+peer must receive every change. Declare one aliased provider per peer and
+apply the same module to each of them:
+
+```terraform
+provider "kea" {
+  alias = "kea_1"
+  dhcp4 = {
+    address = "http://kea-1:8000"
+  }
+}
+
+provider "kea" {
+  alias = "kea_2"
+  dhcp4 = {
+    address = "http://kea-2:8000"
+  }
+}
+
+module "dhcp_kea_1" {
+  source    = "./modules/dhcp"
+  providers = { kea = kea.kea_1 }
+}
+
+module "dhcp_kea_2" {
+  source    = "./modules/dhcp"
+  providers = { kea = kea.kea_2 }
+}
+```
+
 Create a DHCP reservation:
 
 ```terraform

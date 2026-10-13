@@ -13,6 +13,7 @@ Currently supported:
 - DHCPv4 host reservations (resource and data source)
 - DHCPv4 client classes (resource and data source)
 - DHCPv4 subnets with pools (resource and data source)
+- Running configuration hash (data source)
 
 ## Requirements
 

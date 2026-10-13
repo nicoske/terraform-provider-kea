@@ -23,7 +23,6 @@ import (
 	"github.com/wfdewith/terraform-provider-kea/internal/clients"
 	"github.com/wfdewith/terraform-provider-kea/internal/errors"
 	"github.com/wfdewith/terraform-provider-kea/internal/keatypes"
-	"github.com/wfdewith/terraform-provider-kea/kea"
 	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
 )
 
@@ -44,7 +43,9 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 	resp.Schema = schema.Schema{
 		Description: "Manages a DHCPv4 host reservation in the Kea DHCP server. " +
 			"Host reservations bind specific IP addresses and DHCP options to clients identified by MAC address, client ID, or other identifiers.\n\n" +
-			"**Important:** Requires the `host_cmds` hook library and a hosts database backend.",
+			"Reservations go to the hosts database when the server has one, otherwise to its running configuration, which `config-write` saves to its configuration file. " +
+			"With a hosts database, reservations in the configuration file are not managed by this resource.\n\n" +
+			"**Important:** Requires the `host_cmds` hook library.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:    true,
@@ -266,14 +267,20 @@ func (r *ReservationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	writeErr := r.client.AddReservation(ctx, kea.OperationTargetDatabase, reservation)
+	target, err := r.client.ReservationTarget(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Error Detecting Reservation Target", err.Error())
+		return
+	}
+
+	writeErr := r.client.AddReservation(ctx, target, reservation)
 	if !applied(writeErr) {
 		resp.Diagnostics.AddError("Error Adding Reservation", writeErr.Error())
 		return
 	}
 	defer addConfigWriteError(&resp.Diagnostics, writeErr)
 
-	created, err := r.client.GetReservation(ctx, kea.OperationTargetDatabase, data.BuildQuery())
+	created, err := r.client.GetReservation(ctx, target, data.BuildQuery())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Created Reservation", err.Error())
 		return
@@ -296,7 +303,13 @@ func (r *ReservationResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	reservation, err := r.client.GetReservation(ctx, kea.OperationTargetDatabase, data.BuildQuery())
+	target, err := r.client.ReservationTarget(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Error Detecting Reservation Target", err.Error())
+		return
+	}
+
+	reservation, err := r.client.GetReservation(ctx, target, data.BuildQuery())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Reservation", err.Error())
 		return
@@ -330,14 +343,20 @@ func (r *ReservationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	writeErr := r.client.UpdateReservation(ctx, kea.OperationTargetDatabase, reservation)
+	target, err := r.client.ReservationTarget(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Error Detecting Reservation Target", err.Error())
+		return
+	}
+
+	writeErr := r.client.UpdateReservation(ctx, target, reservation)
 	if !applied(writeErr) {
 		resp.Diagnostics.AddError("Error Updating Reservation", writeErr.Error())
 		return
 	}
 	defer addConfigWriteError(&resp.Diagnostics, writeErr)
 
-	updated, err := r.client.GetReservation(ctx, kea.OperationTargetDatabase, data.BuildQuery())
+	updated, err := r.client.GetReservation(ctx, target, data.BuildQuery())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Updated Reservation", err.Error())
 		return
@@ -360,7 +379,13 @@ func (r *ReservationResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	if err := r.client.DeleteReservation(ctx, kea.OperationTargetDatabase, data.BuildQuery()); err != nil {
+	target, err := r.client.ReservationTarget(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Error Detecting Reservation Target", err.Error())
+		return
+	}
+
+	if err := r.client.DeleteReservation(ctx, target, data.BuildQuery()); err != nil {
 		addDeleteError(&resp.Diagnostics, "Error Deleting Reservation", err)
 	}
 }

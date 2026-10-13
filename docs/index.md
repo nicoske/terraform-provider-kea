@@ -51,7 +51,7 @@ provider "kea" {
 
 ### Optional
 
-- `dhcp4` (Attributes) Connection settings for the Kea DHCPv4 server. (see [below for nested schema](#nestedatt--dhcp4))
+- `dhcp4` (Attributes) Connection settings for the Kea DHCPv4 server. Every change to the running configuration is followed by `config-write`, so that Kea keeps it across restarts. (see [below for nested schema](#nestedatt--dhcp4))
 
 <a id="nestedatt--dhcp4"></a>
 ### Nested Schema for `dhcp4`
@@ -62,6 +62,7 @@ Optional:
 - `ca_cert` (String) PEM-encoded CA certificate bundle used to verify the Kea server's TLS certificate. Only applies to `https://` addresses. Falls back to `KEA_DHCP4_CA_CERT` environment variable.
 - `client_cert` (String) PEM-encoded client certificate presented to the Kea server for mutual TLS. Requires `client_key` and only applies to `https://` addresses. Falls back to `KEA_DHCP4_CLIENT_CERT` environment variable.
 - `client_key` (String, Sensitive) PEM-encoded private key for `client_cert`. Falls back to `KEA_DHCP4_CLIENT_KEY` environment variable.
+- `config_write_filename` (String) File that `config-write` writes to, instead of the configuration file Kea was started with. Kea only accepts files in the directory of its startup configuration file. Falls back to `KEA_DHCP4_CONFIG_WRITE_FILENAME` environment variable.
 - `http_password` (String, Sensitive) Password for HTTP basic authentication. Falls back to `KEA_DHCP4_HTTP_PASSWORD` environment variable.
 - `http_username` (String) Username for HTTP basic authentication. Falls back to `KEA_DHCP4_HTTP_USERNAME` environment variable.
 - `skip_tls_verify` (Boolean) Skip verification of the Kea server's TLS certificate. Only applies to `https://` addresses. Falls back to `KEA_DHCP4_SKIP_TLS_VERIFY` environment variable.

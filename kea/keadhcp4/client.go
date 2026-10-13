@@ -2,6 +2,7 @@ package keadhcp4
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/hashicorp/go-version"
@@ -9,14 +10,30 @@ import (
 )
 
 type Client struct {
-	transport kea.Transport
+	transport           kea.Transport
+	configWriteFilename string
 
 	mu      sync.Mutex
 	version *version.Version
 }
 
-func NewClient(transport kea.Transport) *Client {
-	return &Client{transport: transport}
+// ClientOption configures optional behaviour of a Client.
+type ClientOption func(*Client)
+
+// WithConfigWriteFilename makes config-write write to filename instead of the
+// file Kea was started with.
+func WithConfigWriteFilename(filename string) ClientOption {
+	return func(c *Client) {
+		c.configWriteFilename = filename
+	}
+}
+
+func NewClient(transport kea.Transport, opts ...ClientOption) *Client {
+	c := &Client{transport: transport}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 func (c *Client) Version(ctx context.Context) (*version.Version, error) {
@@ -34,4 +51,31 @@ func (c *Client) Version(ctx context.Context) (*version.Version, error) {
 
 	c.version = v
 	return v, nil
+}
+
+// ConfigWriteError reports a command that Kea applied to its running
+// configuration but could not write to disk.
+type ConfigWriteError struct {
+	Done string
+	Err  error
+}
+
+func (e *ConfigWriteError) Error() string {
+	return fmt.Sprintf("%s but config-write failed: %v", e.Done, e.Err)
+}
+
+func (e *ConfigWriteError) Unwrap() error {
+	return e.Err
+}
+
+// exec sends a command that changes the configuration, then config-write so
+// that Kea keeps the change across restarts.
+func (c *Client) exec(ctx context.Context, done, command string, arguments any) error {
+	if err := kea.Exec(ctx, c.transport, command, arguments); err != nil {
+		return err
+	}
+	if err := c.ConfigWrite(ctx, c.configWriteFilename); err != nil {
+		return &ConfigWriteError{Done: done, Err: err}
+	}
+	return nil
 }

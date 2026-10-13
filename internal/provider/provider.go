@@ -39,6 +39,8 @@ type KeaProviderClientModel struct {
 	ClientCert    types.String `tfsdk:"client_cert"`
 	ClientKey     types.String `tfsdk:"client_key"`
 	SkipTLSVerify types.Bool   `tfsdk:"skip_tls_verify"`
+
+	ConfigWriteFilename types.String `tfsdk:"config_write_filename"`
 }
 
 func New(version string) func() provider.Provider {
@@ -59,7 +61,7 @@ func (p *KeaProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 		Attributes: map[string]schema.Attribute{
 			"dhcp4": schema.SingleNestedAttribute{
 				Optional:    true,
-				Description: "Connection settings for the Kea DHCPv4 server.",
+				Description: "Connection settings for the Kea DHCPv4 server. Every change to the running configuration is followed by `config-write`, so that Kea keeps it across restarts.",
 				Attributes: map[string]schema.Attribute{
 					"address": schema.StringAttribute{
 						Optional: true,
@@ -99,6 +101,12 @@ func (p *KeaProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 						Description: "Skip verification of the Kea server's TLS certificate. " +
 							"Only applies to `https://` addresses. " +
 							"Falls back to `KEA_DHCP4_SKIP_TLS_VERIFY` environment variable.",
+					},
+					"config_write_filename": schema.StringAttribute{
+						Optional: true,
+						Description: "File that `config-write` writes to, instead of the configuration file Kea was started with. " +
+							"Kea only accepts files in the directory of its startup configuration file. " +
+							"Falls back to `KEA_DHCP4_CONFIG_WRITE_FILENAME` environment variable.",
 					},
 				},
 			},
@@ -182,8 +190,12 @@ func configureDHCP4Client(data *KeaProviderClientModel) (*keadhcp4.Client, error
 		return nil, err
 	}
 
-	client := keadhcp4.NewClient(transport)
-	return client, nil
+	var opts []keadhcp4.ClientOption
+	if filename := envString(data.ConfigWriteFilename, "KEA_DHCP4_CONFIG_WRITE_FILENAME"); filename != "" {
+		opts = append(opts, keadhcp4.WithConfigWriteFilename(filename))
+	}
+
+	return keadhcp4.NewClient(transport, opts...), nil
 }
 
 func NewDHCP4ClientFromEnv() (*keadhcp4.Client, error) {

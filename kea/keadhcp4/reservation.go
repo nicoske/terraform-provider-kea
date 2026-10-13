@@ -30,17 +30,26 @@ func (c *Client) GetReservation(ctx context.Context, target kea.OperationTarget,
 }
 
 func (c *Client) AddReservation(ctx context.Context, target kea.OperationTarget, reservation Reservation) error {
-	return kea.Exec(ctx, c.transport, "reservation-add", kea.WithTarget(target, struct {
+	return c.execReservation(ctx, target, "reservation added", "reservation-add", kea.WithTarget(target, struct {
 		Reservation Reservation `json:"reservation"`
 	}{reservation}))
 }
 
 func (c *Client) UpdateReservation(ctx context.Context, target kea.OperationTarget, reservation Reservation) error {
-	return kea.Exec(ctx, c.transport, "reservation-update", kea.WithTarget(target, struct {
+	return c.execReservation(ctx, target, "reservation updated", "reservation-update", kea.WithTarget(target, struct {
 		Reservation Reservation `json:"reservation"`
 	}{reservation}))
 }
 
 func (c *Client) DeleteReservation(ctx context.Context, target kea.OperationTarget, query keaquery.ReservationQuery) error {
-	return kea.Exec(ctx, c.transport, "reservation-del", kea.WithTarget(target, query))
+	return c.execReservation(ctx, target, "reservation deleted", "reservation-del", kea.WithTarget(target, query))
+}
+
+// execReservation skips config-write when the reservation only lives in the
+// hosts database.
+func (c *Client) execReservation(ctx context.Context, target kea.OperationTarget, done, command string, arguments any) error {
+	if target == kea.OperationTargetDatabase {
+		return kea.Exec(ctx, c.transport, command, arguments)
+	}
+	return c.exec(ctx, done, command, arguments)
 }

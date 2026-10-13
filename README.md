@@ -102,6 +102,11 @@ export KEA_DHCP4_HTTP_PASSWORD="secret" # optional
 provider "kea" {}
 ```
 
+Every change to the running configuration is followed by `config-write`, so
+that Kea saves it to the file it was started with and keeps it across
+restarts. Set `config_write_filename` to write to another file in the same
+directory.
+
 Create a DHCP reservation:
 
 ```terraform

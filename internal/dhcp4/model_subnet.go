@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
-	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework-nettypes/cidrtypes"
@@ -64,12 +63,6 @@ var poolObjectType = types.ObjectType{
 		"evaluate_additional_classes": types.SetType{ElemType: types.StringType},
 		"option_data":                 types.SetType{ElemType: optionDataObjectType},
 	},
-}
-
-// SubnetResourceModel adds the attributes that only the resource has.
-type SubnetResourceModel struct {
-	SubnetModel
-	InSync types.Bool `tfsdk:"in_sync"`
 }
 
 func (m *SubnetModel) ToAPI(ctx context.Context) (keadhcp4.Subnet, diag.Diagnostics) {
@@ -211,13 +204,6 @@ func (m *SubnetModel) BuildQuery() keaquery.SubnetQuery {
 
 	prefix, _ := m.Subnet.ValueIPv4Prefix()
 	return keaquery.SubnetByPrefix(prefix)
-}
-
-func (m *SubnetModel) driftID() types.String {
-	if !m.ID.IsNull() && !m.ID.IsUnknown() {
-		return types.StringValue(strconv.FormatInt(m.ID.ValueInt64(), 10))
-	}
-	return types.StringValue(m.Subnet.ValueString())
 }
 
 func (p *PoolModel) ToAPI(ctx context.Context) (keadhcp4.Pool, diag.Diagnostics) {

@@ -16,7 +16,6 @@ import (
 	"github.com/wfdewith/terraform-provider-kea/internal/acctest"
 	"github.com/wfdewith/terraform-provider-kea/kea"
 	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
-	"github.com/wfdewith/terraform-provider-kea/kea/keaquery"
 )
 
 func TestProvider(t *testing.T) {
@@ -160,44 +159,9 @@ data "kea_dhcp4_reservation" "test" {
 `, acctest.StaticSubnetMAC)
 }
 
-func TestProvider_serversConflictsWithAddress(t *testing.T) {
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
-		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: fmt.Sprintf(`
-provider "kea" {
-  dhcp4 = {
-    address = %[1]q
-    servers = [{ address = %[1]q }]
-  }
-}
-`, os.Getenv("KEA_DHCP4_ADDRESS")) + testAccProviderConfig_staticReservation(),
-				ExpectError: regexp.MustCompile(`Invalid Attribute Combination`),
-			},
-		},
-	})
-}
-
-func TestProvider_serversDuplicateAddress(t *testing.T) {
-	address := os.Getenv("KEA_DHCP4_ADDRESS")
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
-		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config:      acctest.ProviderConfigServers(false, address, address) + testAccProviderConfig_staticReservation(),
-				ExpectError: regexp.MustCompile(`duplicate\s+server\s+address`),
-			},
-		},
-	})
-}
-
 func TestAccProvider_configWrite(t *testing.T) {
 	configFile := testAccConfigFile(t)
-	mac := "02:11:22:33:99:01"
+	name := "config-write"
 	lastWrite := testAccModTime(t, configFile)
 
 	resource.Test(t, resource.TestCase{
@@ -208,23 +172,23 @@ func TestAccProvider_configWrite(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config:        testAccProviderConfig_configWrite("", mac, "10.67.0.240"),
+				Config:        testAccProviderConfig_configWrite("", name, "option[host-name].text == 'a'"),
 				PostApplyFunc: testAccCheckConfigWrittenFunc(t, configFile, &lastWrite),
 			},
 			{
-				Config:        testAccProviderConfig_configWrite("", mac, "10.67.0.241"),
+				Config:        testAccProviderConfig_configWrite("", name, "option[host-name].text == 'b'"),
 				PostApplyFunc: testAccCheckConfigWrittenFunc(t, configFile, &lastWrite),
 			},
 		},
 	})
 }
 
-func TestAccProvider_configWriteMemory(t *testing.T) {
-	configFile := testAccConfigFile(t)
+func TestAccProvider_configWriteWithoutHostsDatabase(t *testing.T) {
+	configFile := testAccMemfileConfigFile(t)
 	mac := "02:11:22:33:99:04"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
+		PreCheck:                 func() { acctest.PreCheckMemfile(t) },
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		CheckDestroy: func(*terraform.State) error {
 			found, err := testAccConfigFileHasReservation(configFile, mac)
@@ -238,7 +202,7 @@ func TestAccProvider_configWriteMemory(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: testAccProviderConfig_configWriteMemory(mac, "10.67.0.244"),
+				Config: testAccProviderConfig_withoutHostsDatabase(mac, "10.67.0.244"),
 				PostApplyFunc: func() {
 					found, err := testAccConfigFileHasReservation(configFile, mac)
 					if err != nil {
@@ -248,56 +212,6 @@ func TestAccProvider_configWriteMemory(t *testing.T) {
 						t.Fatalf("reservation %s not in %s", mac, configFile)
 					}
 				},
-			},
-		},
-	})
-}
-
-func TestAccProvider_configWritePartialWrite(t *testing.T) {
-	configFile := testAccConfigFile(t)
-	mac := "02:11:22:33:99:05"
-	first := os.Getenv("KEA_DHCP4_ADDRESS")
-	unreachable := "http://127.0.0.1:1"
-	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
-	t.Cleanup(func() {
-		_ = keadhcp4.NewClient(&kea.HTTPTransport{Endpoint: first}, keadhcp4.WithConfigWrite("")).
-			DeleteReservation(context.Background(), kea.OperationTargetMemory, query)
-	})
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { acctest.PreCheck(t) },
-		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: fmt.Sprintf(`
-provider "kea" {
-  dhcp4 = {
-    servers      = [{ address = %q }, { address = %q }]
-    config_write = true
-  }
-}
-
-resource "kea_dhcp4_reservation" "test" {
-  subnet_id        = 1
-  hw_address       = %q
-  ip_address       = "10.67.0.245"
-  operation_target = "memory"
-}
-`, first, unreachable, mac),
-				ExpectError: regexp.MustCompile(fmt.Sprintf(`reservation-add\s+succeeded\s+on\s+%s\s+and\s+failed\s+on\s+%s(.|\s)+configuration\s+written\s+on\s+%s`,
-					regexp.QuoteMeta(first), regexp.QuoteMeta(unreachable), regexp.QuoteMeta(first))),
-			},
-			{
-				PreConfig: func() {
-					found, err := testAccConfigFileHasReservation(configFile, mac)
-					if err != nil {
-						t.Fatal(err)
-					}
-					if !found {
-						t.Fatalf("reservation %s not in %s", mac, configFile)
-					}
-				},
-				Config: acctest.ProviderConfig(),
 			},
 		},
 	})
@@ -314,7 +228,7 @@ func TestAccProvider_configWriteFilename(t *testing.T) {
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccProviderConfig_configWrite(filepath.Base(configFile), "02:11:22:33:99:02", "10.67.0.242"),
+				Config: testAccProviderConfig_configWrite(filepath.Base(configFile), "config-write-filename", "option[host-name].text == 'a'"),
 				PostApplyFunc: func() {
 					// Kea creates new files with mode 0640 as root, only their presence can be checked.
 					if _, err := os.Stat(configFile); err != nil {
@@ -327,15 +241,14 @@ func TestAccProvider_configWriteFilename(t *testing.T) {
 }
 
 func TestAccProvider_configWriteOutsideConfigDir(t *testing.T) {
-	mac := "02:11:22:33:99:03"
+	name := "config-write-outside"
 	t.Cleanup(func() {
 		client := keadhcp4.NewClient(&kea.HTTPTransport{
 			Endpoint: os.Getenv("KEA_DHCP4_ADDRESS"),
 			Username: os.Getenv("KEA_DHCP4_HTTP_USERNAME"),
 			Password: os.Getenv("KEA_DHCP4_HTTP_PASSWORD"),
 		})
-		_ = client.DeleteReservation(context.Background(), kea.OperationTargetDatabase,
-			keaquery.ReservationByIdentifier(1, "hw-address", mac))
+		_ = client.DeleteClientClass(context.Background(), name)
 	})
 
 	resource.Test(t, resource.TestCase{
@@ -343,11 +256,21 @@ func TestAccProvider_configWriteOutsideConfigDir(t *testing.T) {
 		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccProviderConfig_configWrite("/tmp/kea-dhcp4.conf", mac, "10.67.0.243"),
-				ExpectError: regexp.MustCompile(`reservation added but config-write failed(.|\s)+same\s+directory\s+as\s+the\s+config\s+file`),
+				Config:      testAccProviderConfig_configWrite("/tmp/kea-dhcp4.conf", name, "option[host-name].text == 'a'"),
+				ExpectError: regexp.MustCompile(`client class added but config-write failed(.|\s)+same\s+directory\s+as\s+the\s+config\s+file`),
 			},
 		},
 	})
+}
+
+func testAccMemfileConfigFile(t *testing.T) string {
+	t.Helper()
+
+	configFile := os.Getenv("KEA_DHCP4_MEMFILE_CONFIG_FILE")
+	if configFile == "" {
+		t.Skip("KEA_DHCP4_MEMFILE_CONFIG_FILE must be set to the host path of the configuration file of the server without a hosts database")
+	}
+	return configFile
 }
 
 func testAccConfigFile(t *testing.T) string {
@@ -431,7 +354,7 @@ func testAccCheckConfigWrittenFunc(t *testing.T, path string, lastWrite *time.Ti
 	}
 }
 
-func testAccProviderConfig_configWrite(filename, mac, ip string) string {
+func testAccProviderConfig_configWrite(filename, name, test string) string {
 	filenameAttr := ""
 	if filename != "" {
 		filenameAttr = fmt.Sprintf("config_write_filename = %q", filename)
@@ -440,32 +363,23 @@ func testAccProviderConfig_configWrite(filename, mac, ip string) string {
 	return fmt.Sprintf(`
 provider "kea" {
   dhcp4 = {
-    config_write = true
     %s
   }
 }
 
+resource "kea_dhcp4_client_class" "test" {
+  name = %q
+  test = %q
+}
+`, filenameAttr, name, test)
+}
+
+func testAccProviderConfig_withoutHostsDatabase(mac, ip string) string {
+	return acctest.ProviderConfigMemfile() + fmt.Sprintf(`
 resource "kea_dhcp4_reservation" "test" {
   subnet_id  = 1
   hw_address = %q
   ip_address = %q
-}
-`, filenameAttr, mac, ip)
-}
-
-func testAccProviderConfig_configWriteMemory(mac, ip string) string {
-	return fmt.Sprintf(`
-provider "kea" {
-  dhcp4 = {
-    config_write = true
-  }
-}
-
-resource "kea_dhcp4_reservation" "test" {
-  subnet_id        = 1
-  hw_address       = %q
-  ip_address       = %q
-  operation_target = "memory"
 }
 `, mac, ip)
 }

@@ -112,15 +112,6 @@ func (d *ReservationDataSource) Schema(ctx context.Context, req datasource.Schem
 				Computed:    true,
 				CustomType:  jsontypes.NormalizedType{},
 			},
-			"operation_target": schema.StringAttribute{
-				Description: "Where Kea looks for the reservation: `database` for the hosts database, " +
-					"`memory` for the running server configuration, or `all` (default) for both.",
-				Optional: true,
-				Computed: true,
-				Validators: []validator.String{
-					operationTargetValidator(),
-				},
-			},
 			"option_data": optionDataDataSourceAttribute("DHCP options configured for this reservation."),
 		},
 	}
@@ -166,13 +157,7 @@ func (d *ReservationDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	ctx, reportDrift := driftWarnings(ctx, &resp.Diagnostics, &data.ID)
-	defer reportDrift()
-
-	target := data.Target(kea.OperationTargetAll)
-	data.OperationTarget = types.StringValue(string(target))
-
-	reservation, err := d.client.GetReservation(ctx, target, data.BuildQuery())
+	reservation, err := d.client.GetReservation(ctx, kea.OperationTargetAll, data.BuildQuery())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Reservation", err.Error())
 		return

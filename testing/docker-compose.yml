@@ -56,7 +56,7 @@ services:
       timeout: 5s
       start_period: 60s
 
-  kea-dhcp4-2:
+  kea-dhcp4-memfile:
     image: docker.cloudsmith.io/isc/docker/kea-dhcp4:${KEA_VERSION}
     restart: unless-stopped
     cap_add:
@@ -69,8 +69,8 @@ services:
       - 8011:8001
       - 8012:8002
     volumes:
-      - ./kea-dhcp4-2.conf:/usr/local/etc/kea-dhcp4.conf:ro
-      - ./config-2:/etc/kea
+      - ./kea-dhcp4-memfile.conf:/usr/local/etc/kea-dhcp4.conf:ro
+      - ./config-memfile:/etc/kea
       - ./certs:/etc/kea/certs:ro
       - ./init-network.sh:/usr/local/bin/init-network.sh:ro
     entrypoint: ["/bin/sh", "/usr/local/bin/init-network.sh"]

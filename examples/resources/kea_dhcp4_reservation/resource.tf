@@ -112,11 +112,3 @@ resource "kea_dhcp4_reservation" "monitored_device" {
     }
   })
 }
-
-# Reservation in the running configuration, for servers without a hosts database
-resource "kea_dhcp4_reservation" "config_only" {
-  subnet_id        = 1
-  hw_address       = "aa:bb:cc:dd:ee:60"
-  ip_address       = "192.0.2.60"
-  operation_target = "memory"
-}

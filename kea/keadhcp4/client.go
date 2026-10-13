@@ -2,28 +2,27 @@ package keadhcp4
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
+	"sync"
 
 	"github.com/wfdewith/terraform-provider-kea/kea"
 )
 
 type Client struct {
 	transport           kea.Transport
-	configWrite         bool
 	configWriteFilename string
+
+	targetMu sync.Mutex
+	target   kea.OperationTarget
 }
 
 // ClientOption configures optional behaviour of a Client.
 type ClientOption func(*Client)
 
-// WithConfigWrite makes the client send config-write after every successful
-// mutating command. An empty filename lets Kea write to the file it was
-// started with.
-func WithConfigWrite(filename string) ClientOption {
+// WithConfigWriteFilename makes config-write write to filename instead of the
+// file Kea was started with.
+func WithConfigWriteFilename(filename string) ClientOption {
 	return func(c *Client) {
-		c.configWrite = true
 		c.configWriteFilename = filename
 	}
 }
@@ -36,82 +35,52 @@ func NewClient(transport kea.Transport, opts ...ClientOption) *Client {
 	return c
 }
 
-// mutate runs send, which sends a command that changes the configuration, and
-// then config-write when it is enabled. When send stops part way through the
-// servers of a kea.MultiTransport, config-write still goes to the servers that
-// took the change, so that they keep it across a restart.
-func (c *Client) mutate(ctx context.Context, done string, send func() error) error {
-	err := send()
-	var partial *kea.PartialWriteError
-	if errors.As(err, &partial) {
-		return c.persistPartial(ctx, err, partial.Done)
-	}
-	if err != nil {
+// ConfigWriteError reports a command that Kea applied to its running
+// configuration but could not write to disk.
+type ConfigWriteError struct {
+	Done string
+	Err  error
+}
+
+func (e *ConfigWriteError) Error() string {
+	return fmt.Sprintf("%s but config-write failed: %v", e.Done, e.Err)
+}
+
+func (e *ConfigWriteError) Unwrap() error {
+	return e.Err
+}
+
+// exec sends a command that changes the configuration, then config-write so
+// that Kea keeps the change across restarts.
+func (c *Client) exec(ctx context.Context, done, command string, arguments any) error {
+	if err := kea.Exec(ctx, c.transport, command, arguments); err != nil {
 		return err
-	}
-	if !c.configWrite {
-		return nil
 	}
 	if err := c.ConfigWrite(ctx, c.configWriteFilename); err != nil {
-		return fmt.Errorf("%s but config-write failed: %w", done, err)
+		return &ConfigWriteError{Done: done, Err: err}
 	}
 	return nil
 }
 
-func (c *Client) persistPartial(ctx context.Context, err error, done []string) error {
-	multi, ok := c.transport.(*kea.MultiTransport)
-	if !c.configWrite || !ok || len(done) == 0 {
-		return err
-	}
-	names := strings.Join(done, ", ")
-	if werr := NewClient(multi.Subset(done...)).ConfigWrite(ctx, c.configWriteFilename); werr != nil {
-		return fmt.Errorf("%w; config-write on %s failed: %w", err, names, werr)
-	}
-	return fmt.Errorf("%w; configuration written on %s", err, names)
-}
+// ReservationTarget returns the operation target for reservation commands:
+// the hosts database when the server has one, otherwise its running
+// configuration, which config-write saves to disk.
+func (c *Client) ReservationTarget(ctx context.Context) (kea.OperationTarget, error) {
+	c.targetMu.Lock()
+	defer c.targetMu.Unlock()
 
-// exec sends a command that changes the configuration through mutate.
-func (c *Client) exec(ctx context.Context, done, command string, arguments any) error {
-	return c.mutate(ctx, done, func() error {
-		return kea.Exec(ctx, c.transport, command, arguments)
-	})
-}
-
-// servers returns the servers behind a kea.MultiTransport. Any other
-// transport is one server with an empty name.
-func (c *Client) servers() []kea.Server {
-	if multi, ok := c.transport.(*kea.MultiTransport); ok {
-		return multi.Servers
+	if c.target != "" {
+		return c.target, nil
 	}
-	return []kea.Server{{Transport: c.transport}}
-}
 
-// upsert sends update to every server that holds the object and add to the
-// others, so that a server that lost the object gets it back. exists asks
-// one server whether it holds the object.
-func (c *Client) upsert(ctx context.Context, add, update string, arguments any, exists func(*Client) (bool, error)) error {
-	servers := c.servers()
-	var done []string
-	for _, server := range servers {
-		err := upsertOn(ctx, server, add, update, arguments, exists)
-		if err != nil && len(servers) == 1 {
-			return err
-		}
-		if err != nil {
-			return &kea.PartialWriteError{Command: update, Done: done, Failed: server.Name, Err: err}
-		}
-		done = append(done, server.Name)
-	}
-	return nil
-}
-
-func upsertOn(ctx context.Context, server kea.Server, add, update string, arguments any, exists func(*Client) (bool, error)) error {
-	found, err := exists(NewClient(server))
+	hasDatabase, err := c.hasHostsDatabase(ctx)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("detecting hosts database: %w", err)
 	}
-	if !found {
-		return kea.Exec(ctx, server, add, arguments)
+
+	c.target = kea.OperationTargetMemory
+	if hasDatabase {
+		c.target = kea.OperationTargetDatabase
 	}
-	return kea.Exec(ctx, server, update, arguments)
+	return c.target, nil
 }

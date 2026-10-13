@@ -5,7 +5,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/wfdewith/terraform-provider-kea/internal/clients"
 	"github.com/wfdewith/terraform-provider-kea/internal/errors"
 	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
@@ -23,18 +22,11 @@ func (d *ConfigHashDataSource) Metadata(ctx context.Context, req datasource.Meta
 
 func (d *ConfigHashDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Retrieves the hash of the running configuration of every Kea DHCPv4 server of the provider, " +
-			"to detect changes made outside Terraform or servers that are out of sync.\n\n" +
-			"Servers with different configuration files never have the same hash, " +
-			"for example the peers of a high availability pair with their own `this-server-name`.",
+		Description: "Retrieves the hash of the running configuration of the Kea DHCPv4 server, " +
+			"to detect changes made outside Terraform.",
 		Attributes: map[string]schema.Attribute{
-			"hashes": schema.MapAttribute{
-				Description: "SHA-256 hash of the running configuration (`config-hash-get`), by server address.",
-				Computed:    true,
-				ElementType: types.StringType,
-			},
-			"in_sync": schema.BoolAttribute{
-				Description: "Whether all servers have the same hash.",
+			"hash": schema.StringAttribute{
+				Description: "SHA-256 hash of the running configuration (`config-hash-get`).",
 				Computed:    true,
 			},
 		},
@@ -63,12 +55,12 @@ func (d *ConfigHashDataSource) Configure(ctx context.Context, req datasource.Con
 func (d *ConfigHashDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var data ConfigHashModel
 
-	hashes, err := d.client.ConfigHashes(ctx)
+	hash, err := d.client.ConfigHash(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Configuration Hash", err.Error())
 		return
 	}
 
-	resp.Diagnostics.Append(data.FromAPI(ctx, hashes)...)
+	data.FromAPI(hash)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

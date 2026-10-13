@@ -104,7 +104,6 @@ resource "kea_dhcp4_client_class" "per_vendor" {
 ### Read-Only
 
 - `id` (String) Unique identifier for the client class, equal to its name.
-- `in_sync` (Boolean) Whether every server of the provider answers the same for this resource. `false` plans an update that writes it to every server again.
 
 <a id="nestedblock--option_data"></a>
 ### Nested Schema for `option_data`

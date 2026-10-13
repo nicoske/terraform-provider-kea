@@ -45,18 +45,10 @@ func (c *Client) AddSubnet(ctx context.Context, subnet Subnet) error {
 	}{[]Subnet{subnet}})
 }
 
-// UpdateSubnet replaces the subnet with the same ID, and adds it to the
-// servers that do not hold it.
 func (c *Client) UpdateSubnet(ctx context.Context, subnet Subnet) error {
-	arguments := struct {
+	return c.exec(ctx, "subnet updated", "subnet4-update", struct {
 		Subnet4 []Subnet `json:"subnet4"`
-	}{[]Subnet{subnet}}
-	return c.mutate(ctx, "subnet updated", func() error {
-		return c.upsert(ctx, "subnet4-add", "subnet4-update", arguments, func(server *Client) (bool, error) {
-			found, err := server.GetSubnet(ctx, keaquery.SubnetByID(subnet.ID))
-			return found != nil, err
-		})
-	})
+	}{[]Subnet{subnet}})
 }
 
 func (c *Client) DeleteSubnet(ctx context.Context, id uint32) error {

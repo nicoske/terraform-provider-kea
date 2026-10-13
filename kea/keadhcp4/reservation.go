@@ -2,7 +2,6 @@ package keadhcp4
 
 import (
 	"context"
-	"net/netip"
 
 	"github.com/wfdewith/terraform-provider-kea/kea"
 	"github.com/wfdewith/terraform-provider-kea/kea/keaquery"
@@ -31,49 +30,26 @@ func (c *Client) GetReservation(ctx context.Context, target kea.OperationTarget,
 }
 
 func (c *Client) AddReservation(ctx context.Context, target kea.OperationTarget, reservation Reservation) error {
-	return c.exec(ctx, "reservation added", "reservation-add", kea.WithTarget(target, struct {
+	return c.execReservation(ctx, target, "reservation added", "reservation-add", kea.WithTarget(target, struct {
 		Reservation Reservation `json:"reservation"`
 	}{reservation}))
 }
 
-// UpdateReservation replaces the reservation with the same subnet and
-// identifier, and adds it to the servers that do not hold it.
 func (c *Client) UpdateReservation(ctx context.Context, target kea.OperationTarget, reservation Reservation) error {
-	arguments := kea.WithTarget(target, struct {
+	return c.execReservation(ctx, target, "reservation updated", "reservation-update", kea.WithTarget(target, struct {
 		Reservation Reservation `json:"reservation"`
-	}{reservation})
-	return c.mutate(ctx, "reservation updated", func() error {
-		return c.upsert(ctx, "reservation-add", "reservation-update", arguments, func(server *Client) (bool, error) {
-			found, err := server.GetReservation(ctx, target, reservation.query())
-			return found != nil, err
-		})
-	})
+	}{reservation}))
 }
 
 func (c *Client) DeleteReservation(ctx context.Context, target kea.OperationTarget, query keaquery.ReservationQuery) error {
-	return c.exec(ctx, "reservation deleted", "reservation-del", kea.WithTarget(target, query))
+	return c.execReservation(ctx, target, "reservation deleted", "reservation-del", kea.WithTarget(target, query))
 }
 
-// query identifies the reservation by the first identifier it holds, or by
-// its address when it has none.
-func (r Reservation) query() keaquery.ReservationQuery {
-	for _, id := range []struct {
-		kind  string
-		value kea.HexID
-	}{
-		{"circuit-id", r.CircuitID},
-		{"client-id", r.ClientID},
-		{"duid", r.DUID},
-		{"flex-id", r.FlexID},
-		{"hw-address", r.HWAddress},
-	} {
-		if len(id.value) > 0 {
-			return keaquery.ReservationByIdentifier(r.SubnetID, id.kind, id.value.String())
-		}
+// execReservation skips config-write when the reservation only lives in the
+// hosts database.
+func (c *Client) execReservation(ctx context.Context, target kea.OperationTarget, done, command string, arguments any) error {
+	if target == kea.OperationTargetDatabase {
+		return kea.Exec(ctx, c.transport, command, arguments)
 	}
-	var ip netip.Addr
-	if r.IPAddress != nil {
-		ip = *r.IPAddress
-	}
-	return keaquery.ReservationByIP(r.SubnetID, ip)
+	return c.exec(ctx, done, command, arguments)
 }

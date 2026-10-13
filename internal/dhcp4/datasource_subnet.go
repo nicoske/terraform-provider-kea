@@ -225,10 +225,6 @@ func (d *SubnetDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	driftID := data.driftID()
-	ctx, reportDrift := driftWarnings(ctx, &resp.Diagnostics, &driftID)
-	defer reportDrift()
-
 	subnet, err := d.client.GetSubnet(ctx, data.BuildQuery())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Subnet", err.Error())

@@ -38,21 +38,11 @@ provider "kea" {
   }
 }
 
-# Save every change to the Kea configuration file
+# Write the configuration to a file other than the one Kea started with
 provider "kea" {
   dhcp4 = {
-    address      = "http://192.0.2.1:8000"
-    config_write = true
-  }
-}
-
-# Send every change to both peers of a high availability pair
-provider "kea" {
-  dhcp4 = {
-    servers = [
-      { address = "http://192.0.2.1:8000" },
-      { address = "http://192.0.2.2:8000" },
-    ]
+    address               = "http://192.0.2.1:8000"
+    config_write_filename = "kea-dhcp4-terraform.conf"
   }
 }
 
@@ -72,7 +62,7 @@ provider "kea" {
 
 ### Optional
 
-- `dhcp4` (Attributes) Connection settings for the Kea DHCPv4 server. (see [below for nested schema](#nestedatt--dhcp4))
+- `dhcp4` (Attributes) Connection settings for the Kea DHCPv4 server. Every change is followed by `config-write`, so that Kea keeps it across restarts. (see [below for nested schema](#nestedatt--dhcp4))
 
 <a id="nestedatt--dhcp4"></a>
 ### Nested Schema for `dhcp4`
@@ -80,29 +70,10 @@ provider "kea" {
 Optional:
 
 - `address` (String) Control channel address: `unix:///path/to/socket` or `http(s)://host:port`. Falls back to `KEA_DHCP4_ADDRESS` environment variable.
-- `config_write` (Boolean) Send `config-write` after every change so that Kea saves its running configuration to disk and keeps it across restarts. With `servers`, a change that stops at a failing server is still written on the servers that took it. Defaults to `false`. Falls back to `KEA_DHCP4_CONFIG_WRITE` environment variable.
-- `config_write_filename` (String) File that `config-write` writes to, instead of the configuration file Kea was started with. Kea only accepts files in the directory of its startup configuration file. Only used when `config_write` is `true`. Falls back to `KEA_DHCP4_CONFIG_WRITE_FILENAME` environment variable.
+- `config_write_filename` (String) File that `config-write` writes to, instead of the configuration file Kea was started with. Kea only accepts files in the directory of its startup configuration file. Falls back to `KEA_DHCP4_CONFIG_WRITE_FILENAME` environment variable.
 - `http_password` (String, Sensitive) Password for HTTP basic authentication. Falls back to `KEA_DHCP4_HTTP_PASSWORD` environment variable.
 - `http_username` (String) Username for HTTP basic authentication. Falls back to `KEA_DHCP4_HTTP_USERNAME` environment variable.
-- `servers` (Attributes List) Several Kea DHCPv4 servers that must hold the same configuration, such as the peers of a high availability pair, which do not replicate configuration changes. Every change is sent to each server in order and stops at the first failure; reads compare the answers of all servers and use the answer of the first server that answers, so a read only fails when no server answers. Conflicts with `address`, `http_username`, `http_password` and the `tls_*` attributes, and their environment variables are not used. (see [below for nested schema](#nestedatt--dhcp4--servers))
-- `strict_sync` (Boolean) Fail reads when a server in `servers` answers differently from the others or does not answer, instead of a warning. Defaults to `false`. Falls back to `KEA_DHCP4_STRICT_SYNC` environment variable.
 - `tls_ca_file` (String) Path to a PEM CA bundle used to verify the server certificate of an `https` address instead of the system roots. Falls back to `KEA_DHCP4_TLS_CA_FILE` environment variable.
 - `tls_client_cert_file` (String) Path to a PEM client certificate for mutual TLS. Requires `tls_client_key_file`. Falls back to `KEA_DHCP4_TLS_CLIENT_CERT_FILE` environment variable.
 - `tls_client_key_file` (String) Path to the PEM private key of `tls_client_cert_file`. Falls back to `KEA_DHCP4_TLS_CLIENT_KEY_FILE` environment variable.
 - `tls_server_name` (String) Server name used to verify the server certificate, when it differs from the host in `address`. Falls back to `KEA_DHCP4_TLS_SERVER_NAME` environment variable.
-
-<a id="nestedatt--dhcp4--servers"></a>
-### Nested Schema for `dhcp4.servers`
-
-Required:
-
-- `address` (String) Control channel address: `unix:///path/to/socket` or `http(s)://host:port`. Names the server in errors and warnings.
-
-Optional:
-
-- `http_password` (String, Sensitive) Password for HTTP basic authentication.
-- `http_username` (String) Username for HTTP basic authentication.
-- `tls_ca_file` (String) Path to a PEM CA bundle used to verify the server certificate of an `https` address instead of the system roots.
-- `tls_client_cert_file` (String) Path to a PEM client certificate for mutual TLS. Requires `tls_client_key_file`.
-- `tls_client_key_file` (String) Path to the PEM private key of `tls_client_cert_file`.
-- `tls_server_name` (String) Server name used to verify the server certificate, when it differs from the host in `address`.

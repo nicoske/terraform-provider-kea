@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/netip"
 	"slices"
 	"testing"
 
 	"github.com/wfdewith/terraform-provider-kea/kea"
 	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
+	"github.com/wfdewith/terraform-provider-kea/kea/keaquery"
 )
 
 // fakeServer answers success to every command except those in answers.
@@ -28,170 +28,112 @@ func (f *fakeServer) Send(ctx context.Context, req kea.CommandRequest, resp *kea
 	return nil
 }
 
-func servers(fakes ...*fakeServer) *kea.MultiTransport {
-	t := &kea.MultiTransport{}
-	for i, f := range fakes {
-		t.Servers = append(t.Servers, kea.Server{Name: string(rune('a' + i)), Transport: f})
+func failing(command string) kea.CommandResponse {
+	return kea.CommandResponse{Result: kea.ResultError, Text: command + " failed"}
+}
+
+func configGet(dhcp4 string) kea.CommandResponse {
+	return kea.CommandResponse{Result: kea.ResultSuccess, Arguments: json.RawMessage(`{"Dhcp4":` + dhcp4 + `,"hash":"x"}`)}
+}
+
+func deleteSubnet(client *keadhcp4.Client) error {
+	return client.DeleteSubnet(context.Background(), 1)
+}
+
+func TestClient_configWriteAfterChange(t *testing.T) {
+	server := &fakeServer{}
+
+	if err := deleteSubnet(keadhcp4.NewClient(server)); err != nil {
+		t.Fatal(err)
 	}
-	return t
+	if want := []string{"subnet4-del", "config-write"}; !slices.Equal(server.commands, want) {
+		t.Fatalf("commands: %v, expected %v", server.commands, want)
+	}
 }
 
-func holding(command, arguments string) *fakeServer {
-	return &fakeServer{answers: map[string]kea.CommandResponse{
-		command: {Result: kea.ResultSuccess, Arguments: json.RawMessage(arguments)},
-	}}
+func TestClient_noConfigWriteAfterFailedChange(t *testing.T) {
+	server := &fakeServer{answers: map[string]kea.CommandResponse{"subnet4-del": failing("subnet4-del")}}
+
+	err := deleteSubnet(keadhcp4.NewClient(server))
+	var writeErr *keadhcp4.ConfigWriteError
+	if err == nil || errors.As(err, &writeErr) {
+		t.Fatalf("expected the subnet4-del error, got %v", err)
+	}
+	if want := []string{"subnet4-del"}; !slices.Equal(server.commands, want) {
+		t.Fatalf("commands: %v, expected %v", server.commands, want)
+	}
 }
 
-func missing(command string) *fakeServer {
-	return &fakeServer{answers: map[string]kea.CommandResponse{
-		command: {Result: kea.ResultEmpty, Text: "not found"},
-	}}
+func TestClient_configWriteError(t *testing.T) {
+	server := &fakeServer{answers: map[string]kea.CommandResponse{"config-write": failing("config-write")}}
+
+	err := deleteSubnet(keadhcp4.NewClient(server))
+	var writeErr *keadhcp4.ConfigWriteError
+	if !errors.As(err, &writeErr) {
+		t.Fatalf("expected ConfigWriteError, got %v", err)
+	}
+	if want := "subnet deleted but config-write failed: general error: config-write failed"; err.Error() != want {
+		t.Fatalf("error: %q, expected %q", err.Error(), want)
+	}
 }
 
-func TestClient_updateAddsWhereMissing(t *testing.T) {
-	ip := netip.MustParseAddr("10.0.0.10")
-	reservation := keadhcp4.Reservation{SubnetID: 1, HWAddress: kea.HexID{0x02, 0, 0, 0, 0, 0x01}, IPAddress: &ip}
-
-	for name, tc := range map[string]struct {
-		get, add, update string
-		call             func(*keadhcp4.Client) error
+func TestClient_reservationTarget(t *testing.T) {
+	cases := map[string]struct {
+		dhcp4 string
+		want  kea.OperationTarget
 	}{
-		"subnet": {"subnet4-get", "subnet4-add", "subnet4-update", func(c *keadhcp4.Client) error {
-			return c.UpdateSubnet(context.Background(), keadhcp4.Subnet{ID: 1, Subnet: netip.MustParsePrefix("10.0.0.0/24")})
-		}},
-		"client class": {"class-get", "class-add", "class-update", func(c *keadhcp4.Client) error {
-			return c.UpdateClientClass(context.Background(), keadhcp4.ClientClass{Name: "x"})
-		}},
-		"reservation": {"reservation-get", "reservation-add", "reservation-update", func(c *keadhcp4.Client) error {
-			return c.UpdateReservation(context.Background(), kea.OperationTargetMemory, reservation)
-		}},
-	} {
+		"hosts-database":        {`{"hosts-database":{"type":"postgresql"}}`, kea.OperationTargetDatabase},
+		"hosts-databases":       {`{"hosts-databases":[{"type":"postgresql"}]}`, kea.OperationTargetDatabase},
+		"empty hosts-databases": {`{"hosts-databases":[]}`, kea.OperationTargetMemory},
+		"no hosts database":     {`{"lease-database":{"type":"memfile"}}`, kea.OperationTargetMemory},
+	}
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			arguments := map[string]string{
-				"subnet4-get":     `{"subnet4": [{"id": 1, "subnet": "10.0.0.0/24"}]}`,
-				"class-get":       `{"client-classes": [{"name": "x"}]}`,
-				"reservation-get": `{"subnet-id": 1, "hw-address": "02:00:00:00:00:01"}`,
-			}[tc.get]
-			a, b := holding(tc.get, arguments), missing(tc.get)
+			server := &fakeServer{answers: map[string]kea.CommandResponse{"config-get": configGet(tc.dhcp4)}}
+			client := keadhcp4.NewClient(server)
 
-			if err := tc.call(keadhcp4.NewClient(servers(a, b))); err != nil {
-				t.Fatal(err)
-			}
-			if !slices.Equal(a.commands, []string{tc.get, tc.update}) {
-				t.Fatalf("commands sent to a: %v", a.commands)
-			}
-			if !slices.Equal(b.commands, []string{tc.get, tc.add}) {
-				t.Fatalf("commands sent to b: %v", b.commands)
-			}
-		})
-	}
-}
-
-func TestClient_updateStopsAtFirstFailure(t *testing.T) {
-	a := holding("subnet4-get", `{"subnet4": [{"id": 1, "subnet": "10.0.0.0/24"}]}`)
-	b := missing("subnet4-get")
-	b.answers["subnet4-add"] = kea.CommandResponse{Result: kea.ResultError, Text: "subnet with the prefix of '10.0.0.0/24' already exists"}
-	c := missing("subnet4-get")
-
-	err := keadhcp4.NewClient(servers(a, b, c)).UpdateSubnet(context.Background(), keadhcp4.Subnet{ID: 1, Subnet: netip.MustParsePrefix("10.0.0.0/24")})
-
-	var partial *kea.PartialWriteError
-	if !errors.As(err, &partial) {
-		t.Fatalf("expected PartialWriteError, got %v", err)
-	}
-	want := "subnet4-update succeeded on a and failed on b: general error: subnet with the prefix of '10.0.0.0/24' already exists"
-	if err.Error() != want {
-		t.Fatalf("expected %q, got %q", want, err.Error())
-	}
-	if len(c.commands) != 0 {
-		t.Fatalf("commands sent after failure: %v", c.commands)
-	}
-}
-
-func failing(command, text string) *fakeServer {
-	return &fakeServer{answers: map[string]kea.CommandResponse{
-		command: {Result: kea.ResultError, Text: text},
-	}}
-}
-
-func addSubnet(c *keadhcp4.Client) error {
-	return c.AddSubnet(context.Background(), keadhcp4.Subnet{ID: 1, Subnet: netip.MustParsePrefix("10.0.0.0/24")})
-}
-
-func TestClient_configWriteAfterPartialWrite(t *testing.T) {
-	a, b, c := &fakeServer{}, &fakeServer{}, failing("subnet4-add", "no space left")
-	d := &fakeServer{}
-
-	err := addSubnet(keadhcp4.NewClient(servers(a, b, c, d), keadhcp4.WithConfigWrite("")))
-
-	var partial *kea.PartialWriteError
-	if !errors.As(err, &partial) {
-		t.Fatalf("expected PartialWriteError, got %v", err)
-	}
-	want := "subnet4-add succeeded on a, b and failed on c: general error: no space left; configuration written on a, b"
-	if err.Error() != want {
-		t.Fatalf("expected %q, got %q", want, err.Error())
-	}
-	for name, s := range map[string]*fakeServer{"a": a, "b": b} {
-		if !slices.Equal(s.commands, []string{"subnet4-add", "config-write"}) {
-			t.Fatalf("commands sent to %s: %v", name, s.commands)
-		}
-	}
-	if !slices.Equal(c.commands, []string{"subnet4-add"}) || len(d.commands) != 0 {
-		t.Fatalf("commands sent: c %v, d %v", c.commands, d.commands)
-	}
-}
-
-func TestClient_configWriteFailsAfterPartialWrite(t *testing.T) {
-	a := failing("config-write", "unable to open file")
-	b := failing("subnet4-add", "no space left")
-
-	err := addSubnet(keadhcp4.NewClient(servers(a, b), keadhcp4.WithConfigWrite("")))
-
-	want := "subnet4-add succeeded on a and failed on b: general error: no space left; " +
-		"config-write on a failed: general error: unable to open file"
-	if err == nil || err.Error() != want {
-		t.Fatalf("expected %q, got %v", want, err)
-	}
-}
-
-func TestClient_noConfigWriteAfterPartialWrite(t *testing.T) {
-	for name, tc := range map[string]struct {
-		servers []*fakeServer
-		opts    []keadhcp4.ClientOption
-	}{
-		"config write disabled":  {[]*fakeServer{{}, failing("subnet4-add", "x")}, nil},
-		"failed on first server": {[]*fakeServer{failing("subnet4-add", "x"), {}}, []keadhcp4.ClientOption{keadhcp4.WithConfigWrite("")}},
-	} {
-		t.Run(name, func(t *testing.T) {
-			err := addSubnet(keadhcp4.NewClient(servers(tc.servers...), tc.opts...))
-
-			var partial *kea.PartialWriteError
-			if !errors.As(err, &partial) {
-				t.Fatalf("expected PartialWriteError, got %v", err)
-			}
-			for _, s := range tc.servers {
-				if slices.Contains(s.commands, "config-write") {
-					t.Fatalf("config-write sent: %v", s.commands)
+			for range 2 {
+				target, err := client.ReservationTarget(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if target != tc.want {
+					t.Fatalf("target: %s, expected %s", target, tc.want)
 				}
 			}
+			if want := []string{"config-get"}; !slices.Equal(server.commands, want) {
+				t.Fatalf("commands: %v, expected %v", server.commands, want)
+			}
 		})
 	}
 }
 
-func TestClient_configWriteAfterPartialUpdate(t *testing.T) {
-	a := holding("subnet4-get", `{"subnet4": [{"id": 1, "subnet": "10.0.0.0/24"}]}`)
-	b := missing("subnet4-get")
-	b.answers["subnet4-add"] = kea.CommandResponse{Result: kea.ResultError, Text: "duplicate"}
+func TestClient_reservationTargetErrorNotCached(t *testing.T) {
+	server := &fakeServer{answers: map[string]kea.CommandResponse{"config-get": failing("config-get")}}
+	client := keadhcp4.NewClient(server)
 
-	err := keadhcp4.NewClient(servers(a, b), keadhcp4.WithConfigWrite("")).
-		UpdateSubnet(context.Background(), keadhcp4.Subnet{ID: 1, Subnet: netip.MustParsePrefix("10.0.0.0/24")})
-
-	want := "subnet4-update succeeded on a and failed on b: general error: duplicate; configuration written on a"
-	if err == nil || err.Error() != want {
-		t.Fatalf("expected %q, got %v", want, err)
+	if _, err := client.ReservationTarget(context.Background()); err == nil {
+		t.Fatal("expected an error")
 	}
-	if !slices.Equal(a.commands, []string{"subnet4-get", "subnet4-update", "config-write"}) {
-		t.Fatalf("commands sent to a: %v", a.commands)
+
+	server.answers["config-get"] = configGet(`{}`)
+	target, err := client.ReservationTarget(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target != kea.OperationTargetMemory {
+		t.Fatalf("target: %s, expected memory", target)
+	}
+}
+
+func TestClient_noConfigWriteForDatabaseReservation(t *testing.T) {
+	server := &fakeServer{}
+	query := keaquery.ReservationByIdentifier(1, "hw-address", "02:00:00:00:00:01")
+
+	if err := keadhcp4.NewClient(server).DeleteReservation(context.Background(), kea.OperationTargetDatabase, query); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"reservation-del"}; !slices.Equal(server.commands, want) {
+		t.Fatalf("commands: %v, expected %v", server.commands, want)
 	}
 }

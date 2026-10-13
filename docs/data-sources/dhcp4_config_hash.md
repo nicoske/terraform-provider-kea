@@ -3,23 +3,20 @@
 page_title: "kea_dhcp4_config_hash Data Source - kea"
 subcategory: ""
 description: |-
-  Retrieves the hash of the running configuration of every Kea DHCPv4 server of the provider, to detect changes made outside Terraform or servers that are out of sync.
-  Servers with different configuration files never have the same hash, for example the peers of a high availability pair with their own this-server-name.
+  Retrieves the hash of the running configuration of the Kea DHCPv4 server, to detect changes made outside Terraform.
 ---
 
 # kea_dhcp4_config_hash (Data Source)
 
-Retrieves the hash of the running configuration of every Kea DHCPv4 server of the provider, to detect changes made outside Terraform or servers that are out of sync.
-
-Servers with different configuration files never have the same hash, for example the peers of a high availability pair with their own `this-server-name`.
+Retrieves the hash of the running configuration of the Kea DHCPv4 server, to detect changes made outside Terraform.
 
 ## Example Usage
 
 ```terraform
 data "kea_dhcp4_config_hash" "current" {}
 
-output "kea_config_hashes" {
-  value = data.kea_dhcp4_config_hash.current.hashes
+output "kea_config_hash" {
+  value = data.kea_dhcp4_config_hash.current.hash
 }
 ```
 
@@ -28,5 +25,4 @@ output "kea_config_hashes" {
 
 ### Read-Only
 
-- `hashes` (Map of String) SHA-256 hash of the running configuration (`config-hash-get`), by server address.
-- `in_sync` (Boolean) Whether all servers have the same hash.
+- `hash` (String) SHA-256 hash of the running configuration (`config-hash-get`).

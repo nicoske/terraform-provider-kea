@@ -5,12 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"slices"
-	"strconv"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -41,22 +37,7 @@ type KeaProviderClientModel struct {
 	TLSClientKeyFile  types.String `tfsdk:"tls_client_key_file"`
 	TLSServerName     types.String `tfsdk:"tls_server_name"`
 
-	ConfigWrite         types.Bool   `tfsdk:"config_write"`
 	ConfigWriteFilename types.String `tfsdk:"config_write_filename"`
-
-	Servers    []KeaProviderServerModel `tfsdk:"servers"`
-	StrictSync types.Bool               `tfsdk:"strict_sync"`
-}
-
-type KeaProviderServerModel struct {
-	Address      types.String `tfsdk:"address"`
-	HTTPUsername types.String `tfsdk:"http_username"`
-	HTTPPassword types.String `tfsdk:"http_password"`
-
-	TLSCAFile         types.String `tfsdk:"tls_ca_file"`
-	TLSClientCertFile types.String `tfsdk:"tls_client_cert_file"`
-	TLSClientKeyFile  types.String `tfsdk:"tls_client_key_file"`
-	TLSServerName     types.String `tfsdk:"tls_server_name"`
 }
 
 func New(version string) func() provider.Provider {
@@ -77,7 +58,7 @@ func (p *KeaProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 		Attributes: map[string]schema.Attribute{
 			"dhcp4": schema.SingleNestedAttribute{
 				Optional:    true,
-				Description: "Connection settings for the Kea DHCPv4 server.",
+				Description: "Connection settings for the Kea DHCPv4 server. Every change is followed by `config-write`, so that Kea keeps it across restarts.",
 				Attributes: map[string]schema.Attribute{
 					"address": schema.StringAttribute{
 						Optional: true,
@@ -116,77 +97,11 @@ func (p *KeaProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *
 						Description: "Server name used to verify the server certificate, when it differs from the host in `address`. " +
 							"Falls back to `KEA_DHCP4_TLS_SERVER_NAME` environment variable.",
 					},
-					"config_write": schema.BoolAttribute{
-						Optional: true,
-						Description: "Send `config-write` after every change so that Kea saves its running configuration to disk " +
-							"and keeps it across restarts. With `servers`, a change that stops at a failing server is still written on the servers that took it. " +
-							"Defaults to `false`. Falls back to `KEA_DHCP4_CONFIG_WRITE` environment variable.",
-					},
 					"config_write_filename": schema.StringAttribute{
 						Optional: true,
 						Description: "File that `config-write` writes to, instead of the configuration file Kea was started with. " +
-							"Kea only accepts files in the directory of its startup configuration file. Only used when `config_write` is `true`. " +
+							"Kea only accepts files in the directory of its startup configuration file. " +
 							"Falls back to `KEA_DHCP4_CONFIG_WRITE_FILENAME` environment variable.",
-					},
-					"servers": schema.ListNestedAttribute{
-						Optional: true,
-						Description: "Several Kea DHCPv4 servers that must hold the same configuration, such as the peers of a high availability pair, " +
-							"which do not replicate configuration changes. Every change is sent to each server in order and stops at the first failure; " +
-							"reads compare the answers of all servers and use the answer of the first server that answers, so a read only fails when no server answers. " +
-							"Conflicts with `address`, `http_username`, `http_password` and the `tls_*` attributes, and their environment variables are not used.",
-						NestedObject: schema.NestedAttributeObject{
-							Attributes: map[string]schema.Attribute{
-								"address": schema.StringAttribute{
-									Required:    true,
-									Description: "Control channel address: `unix:///path/to/socket` or `http(s)://host:port`. Names the server in errors and warnings.",
-									Validators: []validator.String{
-										IsValidKeaURL(),
-									},
-								},
-								"http_username": schema.StringAttribute{
-									Optional:    true,
-									Description: "Username for HTTP basic authentication.",
-								},
-								"http_password": schema.StringAttribute{
-									Optional:    true,
-									Sensitive:   true,
-									Description: "Password for HTTP basic authentication.",
-								},
-								"tls_ca_file": schema.StringAttribute{
-									Optional:    true,
-									Description: "Path to a PEM CA bundle used to verify the server certificate of an `https` address instead of the system roots.",
-								},
-								"tls_client_cert_file": schema.StringAttribute{
-									Optional:    true,
-									Description: "Path to a PEM client certificate for mutual TLS. Requires `tls_client_key_file`.",
-								},
-								"tls_client_key_file": schema.StringAttribute{
-									Optional:    true,
-									Description: "Path to the PEM private key of `tls_client_cert_file`.",
-								},
-								"tls_server_name": schema.StringAttribute{
-									Optional:    true,
-									Description: "Server name used to verify the server certificate, when it differs from the host in `address`.",
-								},
-							},
-						},
-						Validators: []validator.List{
-							listvalidator.SizeAtLeast(1),
-							listvalidator.ConflictsWith(
-								path.MatchRelative().AtParent().AtName("address"),
-								path.MatchRelative().AtParent().AtName("http_username"),
-								path.MatchRelative().AtParent().AtName("http_password"),
-								path.MatchRelative().AtParent().AtName("tls_ca_file"),
-								path.MatchRelative().AtParent().AtName("tls_client_cert_file"),
-								path.MatchRelative().AtParent().AtName("tls_client_key_file"),
-								path.MatchRelative().AtParent().AtName("tls_server_name"),
-							),
-						},
-					},
-					"strict_sync": schema.BoolAttribute{
-						Optional: true,
-						Description: "Fail reads when a server in `servers` answers differently from the others or does not answer, instead of a warning. " +
-							"Defaults to `false`. Falls back to `KEA_DHCP4_STRICT_SYNC` environment variable.",
 					},
 				},
 			},
@@ -244,54 +159,6 @@ func (p *KeaProvider) DataSources(_ context.Context) []func() datasource.DataSou
 }
 
 func configureDHCP4Client(data *KeaProviderClientModel) (*keadhcp4.Client, error) {
-	servers, err := dhcp4Servers(data)
-	if err != nil || servers == nil {
-		return nil, err
-	}
-
-	strict, err := configBool(data, func(m *KeaProviderClientModel) types.Bool { return m.StrictSync }, "KEA_DHCP4_STRICT_SYNC")
-	if err != nil {
-		return nil, err
-	}
-
-	var opts []keadhcp4.ClientOption
-	configWrite, err := configBool(data, func(m *KeaProviderClientModel) types.Bool { return m.ConfigWrite }, "KEA_DHCP4_CONFIG_WRITE")
-	if err != nil {
-		return nil, err
-	}
-	if configWrite {
-		filename := configValue(data, func(m *KeaProviderClientModel) types.String { return m.ConfigWriteFilename }, "KEA_DHCP4_CONFIG_WRITE_FILENAME")
-		opts = append(opts, keadhcp4.WithConfigWrite(filename))
-	}
-
-	client := keadhcp4.NewClient(&kea.MultiTransport{Servers: servers, Strict: strict}, opts...)
-	return client, nil
-}
-
-func dhcp4Servers(data *KeaProviderClientModel) ([]kea.Server, error) {
-	if data != nil && len(data.Servers) > 0 {
-		servers := make([]kea.Server, 0, len(data.Servers))
-		for _, s := range data.Servers {
-			address := s.Address.ValueString()
-			if slices.ContainsFunc(servers, func(server kea.Server) bool { return server.Name == address }) {
-				return nil, fmt.Errorf("duplicate server address %s", address)
-			}
-			transport, err := newKeaTransport(address, transportConfig{
-				httpUsername:      s.HTTPUsername.ValueString(),
-				httpPassword:      s.HTTPPassword.ValueString(),
-				tlsCAFile:         s.TLSCAFile.ValueString(),
-				tlsClientCertFile: s.TLSClientCertFile.ValueString(),
-				tlsClientKeyFile:  s.TLSClientKeyFile.ValueString(),
-				tlsServerName:     s.TLSServerName.ValueString(),
-			})
-			if err != nil {
-				return nil, fmt.Errorf("%s: %w", address, err)
-			}
-			servers = append(servers, kea.Server{Name: address, Transport: transport})
-		}
-		return servers, nil
-	}
-
 	address := configValue(data, func(m *KeaProviderClientModel) types.String { return m.Address }, "KEA_DHCP4_ADDRESS")
 
 	// No address configured - skip DHCP4 client setup
@@ -310,7 +177,13 @@ func dhcp4Servers(data *KeaProviderClientModel) ([]kea.Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []kea.Server{{Name: address, Transport: transport}}, nil
+
+	var opts []keadhcp4.ClientOption
+	if filename := configValue(data, func(m *KeaProviderClientModel) types.String { return m.ConfigWriteFilename }, "KEA_DHCP4_CONFIG_WRITE_FILENAME"); filename != "" {
+		opts = append(opts, keadhcp4.WithConfigWriteFilename(filename))
+	}
+
+	return keadhcp4.NewClient(transport, opts...), nil
 }
 
 func configValue(data *KeaProviderClientModel, attr func(*KeaProviderClientModel) types.String, env string) string {
@@ -320,23 +193,6 @@ func configValue(data *KeaProviderClientModel, attr func(*KeaProviderClientModel
 		}
 	}
 	return os.Getenv(env)
-}
-
-func configBool(data *KeaProviderClientModel, attr func(*KeaProviderClientModel) types.Bool, env string) (bool, error) {
-	if data != nil {
-		if v := attr(data); !v.IsNull() && !v.IsUnknown() {
-			return v.ValueBool(), nil
-		}
-	}
-	s := os.Getenv(env)
-	if s == "" {
-		return false, nil
-	}
-	b, err := strconv.ParseBool(s)
-	if err != nil {
-		return false, fmt.Errorf("invalid %s: %w", env, err)
-	}
-	return b, nil
 }
 
 type transportConfig struct {

@@ -18,7 +18,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/wfdewith/terraform-provider-kea/internal/clients"
 	"github.com/wfdewith/terraform-provider-kea/internal/errors"
 	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
@@ -45,7 +44,6 @@ func (r *ClientClassResource) Schema(ctx context.Context, req resource.SchemaReq
 			"A class can only refer to classes defined before it, so use references or `depends_on` to create classes in the right order.\n\n" +
 			"**Important:** Requires the `class_cmds` hook library. Kea keeps classes added through `class_cmds` in memory only.",
 		Attributes: map[string]schema.Attribute{
-			"in_sync": inSyncAttribute(),
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "Unique identifier for the client class, equal to its name.",
@@ -209,7 +207,7 @@ func (r *ClientClassResource) Configure(ctx context.Context, req resource.Config
 }
 
 func (r *ClientClassResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data ClientClassResourceModel
+	var data ClientClassModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -222,10 +220,12 @@ func (r *ClientClassResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	if err := r.client.AddClientClass(ctx, class); err != nil {
-		resp.Diagnostics.AddError("Error Adding Client Class", err.Error())
+	writeErr := r.client.AddClientClass(ctx, class)
+	if !applied(writeErr) {
+		resp.Diagnostics.AddError("Error Adding Client Class", writeErr.Error())
 		return
 	}
+	defer addConfigWriteError(&resp.Diagnostics, writeErr)
 
 	created, err := r.client.GetClientClass(ctx, class.Name)
 	if err != nil {
@@ -239,22 +239,18 @@ func (r *ClientClassResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	resp.Diagnostics.Append(data.FromAPI(ctx, created)...)
-	data.InSync = types.BoolValue(true)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *ClientClassResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data ClientClassResourceModel
+	var data ClientClassModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	ctx, reportDrift := driftWarnings(ctx, &resp.Diagnostics, &data.ID)
-
 	class, err := r.client.GetClientClass(ctx, data.Name.ValueString())
-	data.InSync = types.BoolValue(reportDrift())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Client Class", err.Error())
 		return
@@ -270,7 +266,7 @@ func (r *ClientClassResource) Read(ctx context.Context, req resource.ReadRequest
 }
 
 func (r *ClientClassResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data ClientClassResourceModel
+	var data ClientClassModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -283,10 +279,12 @@ func (r *ClientClassResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	if err := r.client.UpdateClientClass(ctx, class); err != nil {
-		resp.Diagnostics.AddError("Error Updating Client Class", err.Error())
+	writeErr := r.client.UpdateClientClass(ctx, class)
+	if !applied(writeErr) {
+		resp.Diagnostics.AddError("Error Updating Client Class", writeErr.Error())
 		return
 	}
+	defer addConfigWriteError(&resp.Diagnostics, writeErr)
 
 	updated, err := r.client.GetClientClass(ctx, class.Name)
 	if err != nil {
@@ -300,12 +298,11 @@ func (r *ClientClassResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	resp.Diagnostics.Append(data.FromAPI(ctx, updated)...)
-	data.InSync = types.BoolValue(true)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *ClientClassResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data ClientClassResourceModel
+	var data ClientClassModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -313,7 +310,7 @@ func (r *ClientClassResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	if err := r.client.DeleteClientClass(ctx, data.Name.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Error Deleting Client Class", err.Error())
+		addDeleteError(&resp.Diagnostics, "Error Deleting Client Class", err)
 	}
 }
 

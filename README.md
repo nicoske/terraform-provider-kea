@@ -13,7 +13,7 @@ Currently supported:
 - DHCPv4 host reservations (resource and data source)
 - DHCPv4 client classes (resource and data source)
 - DHCPv4 subnets with pools (resource and data source)
-- Running configuration hash per server (data source)
+- Running configuration hash (data source)
 
 ## Requirements
 
@@ -39,6 +39,8 @@ library directly on your `kea-dhcp4` (or `kea-dhcp6`) service instead.
 
 Each resource needs a hook library on the Kea server: `host_cmds` for host
 reservations, `class_cmds` for client classes, `subnet_cmds` for subnets.
+Reservations go to the hosts database when the server has one, otherwise to
+its configuration file.
 
 See [`testing/kea-dhcp4.conf`](testing/kea-dhcp4.conf) for a working example of
 control socket and hook library configuration.
@@ -123,42 +125,42 @@ export KEA_DHCP4_HTTP_PASSWORD="secret" # optional
 provider "kea" {}
 ```
 
-Changes made through the control channel live in memory only. Set
-`config_write = true` (or `KEA_DHCP4_CONFIG_WRITE=true`) to send `config-write`
-after every change so that Kea saves its configuration to disk:
-
-```terraform
-provider "kea" {
-  dhcp4 = {
-    address      = "http://kea-server:8000"
-    config_write = true
-  }
-}
-```
+Every change is followed by `config-write`, so that Kea saves its running
+configuration to the file it was started with and keeps the change across
+restarts. Set `config_write_filename` to write to another file in the same
+directory.
 
 ### Several servers
 
 Kea high availability peers do not replicate configuration changes, so each
-peer must receive every change. List the peers in `servers` to send every
-change to each of them in order:
+peer must receive every change. Declare one aliased provider per peer and
+apply the same module to each of them:
 
 ```terraform
 provider "kea" {
+  alias = "kea_1"
   dhcp4 = {
-    servers = [
-      { address = "http://kea-1:8000" },
-      { address = "http://kea-2:8000" },
-    ]
+    address = "http://kea-1:8000"
   }
 }
-```
 
-A change stops at the first server that fails, and the error names the
-servers that already applied it. Reads ask every server, use the answer of
-the first server that answers and warn when another one answers differently
-or does not answer; `strict_sync = true` makes that an error. A resource that the
-servers answer differently for reads back `in_sync = false`, and the next apply
-writes it to every server again, adding it where it is missing.
+provider "kea" {
+  alias = "kea_2"
+  dhcp4 = {
+    address = "http://kea-2:8000"
+  }
+}
+
+module "dhcp_kea_1" {
+  source    = "./modules/dhcp"
+  providers = { kea = kea.kea_1 }
+}
+
+module "dhcp_kea_2" {
+  source    = "./modules/dhcp"
+  providers = { kea = kea.kea_2 }
+}
+```
 
 Create a DHCP reservation:
 

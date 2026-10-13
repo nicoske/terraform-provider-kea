@@ -4,6 +4,3 @@ terraform import kea_dhcp4_reservation.server01 1/hw-address/aa:bb:cc:dd:ee:01
 
 # Reservation identified by its reserved address
 terraform import kea_dhcp4_reservation.server02 1/ip-address/192.0.2.11
-
-# Reservation with an operation_target other than database, given as a prefix
-terraform import kea_dhcp4_reservation.config_only memory/1/hw-address/aa:bb:cc:dd:ee:60

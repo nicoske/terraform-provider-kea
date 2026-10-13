@@ -147,9 +147,6 @@ func (d *ClientClassDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	ctx, reportDrift := driftWarnings(ctx, &resp.Diagnostics, &data.ID)
-	defer reportDrift()
-
 	class, err := d.client.GetClientClass(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Client Class", err.Error())

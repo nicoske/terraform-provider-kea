@@ -24,21 +24,11 @@ provider "kea" {
   }
 }
 
-# Save every change to the Kea configuration file
+# Write the configuration to a file other than the one Kea started with
 provider "kea" {
   dhcp4 = {
-    address      = "http://192.0.2.1:8000"
-    config_write = true
-  }
-}
-
-# Send every change to both peers of a high availability pair
-provider "kea" {
-  dhcp4 = {
-    servers = [
-      { address = "http://192.0.2.1:8000" },
-      { address = "http://192.0.2.2:8000" },
-    ]
+    address               = "http://192.0.2.1:8000"
+    config_write_filename = "kea-dhcp4-terraform.conf"
   }
 }
 

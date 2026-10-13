@@ -2,9 +2,7 @@ package dhcp4
 
 import (
 	"context"
-	"fmt"
 	"math"
-	"slices"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
@@ -18,14 +16,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/wfdewith/terraform-provider-kea/internal/clients"
 	"github.com/wfdewith/terraform-provider-kea/internal/errors"
 	"github.com/wfdewith/terraform-provider-kea/internal/keatypes"
-	"github.com/wfdewith/terraform-provider-kea/kea"
 	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
 )
 
@@ -45,9 +41,10 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 	resp.Schema = schema.Schema{
 		Description: "Manages a DHCPv4 host reservation in the Kea DHCP server. " +
 			"Host reservations bind specific IP addresses and DHCP options to clients identified by MAC address, client ID, or other identifiers.\n\n" +
-			"**Important:** Requires the `host_cmds` hook library, and a hosts database backend unless `operation_target` is `memory`.",
+			"Reservations go to the hosts database when the server has one, otherwise to its running configuration, which `config-write` saves to its configuration file. " +
+			"With a hosts database, reservations in the configuration file are not managed by this resource.\n\n" +
+			"**Important:** Requires the `host_cmds` hook library.",
 		Attributes: map[string]schema.Attribute{
-			"in_sync": inSyncAttribute(),
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "Unique identifier for the reservation in the format `{subnet_id}/{identifier_type}/{identifier}`.",
@@ -139,22 +136,6 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 				Optional:    true,
 				CustomType:  jsontypes.NormalizedType{},
 			},
-
-			"operation_target": schema.StringAttribute{
-				Description: "Where Kea stores the reservation: `database` (default) for the hosts database, " +
-					"`memory` for the running server configuration, or `all` for both. " +
-					"Reservations in `memory` are lost when Kea restarts unless the configuration is written to disk. " +
-					"Changing this forces a new resource.",
-				Optional: true,
-				Computed: true,
-				Default:  stringdefault.StaticString(string(kea.OperationTargetDatabase)),
-				Validators: []validator.String{
-					operationTargetValidator(),
-				},
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
 		},
 		Blocks: map[string]schema.Block{
 			"option_data": optionDataBlock("DHCP options to send to this client, overriding subnet and global options."),
@@ -194,17 +175,7 @@ func (r *ReservationResource) Configure(ctx context.Context, req resource.Config
 }
 
 func (r *ReservationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	id, target := req.ID, kea.OperationTargetDatabase
-	if prefix, rest, ok := strings.Cut(id, "/"); ok && strings.Count(rest, "/") == 2 {
-		id, target = rest, kea.OperationTarget(prefix)
-		if !slices.Contains(operationTargets, target) {
-			resp.Diagnostics.AddError("Invalid Import ID",
-				fmt.Sprintf("unsupported operation target %q, expected one of database, memory or all", prefix))
-			return
-		}
-	}
-
-	subnetID, identifierType, identifier, err := parseReservationID(id)
+	subnetID, identifierType, identifier, err := parseReservationID(req.ID)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid Import ID", err.Error())
 		return
@@ -220,13 +191,12 @@ func (r *ReservationResource) ImportState(ctx context.Context, req resource.Impo
 		value = keatypes.NewHexIDValue(identifier)
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("operation_target"), string(target))...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("subnet_id"), subnetID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(strings.ReplaceAll(identifierType, "-", "_")), value)...)
 }
 
 func (r *ReservationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data ReservationResourceModel
+	var data ReservationModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -239,12 +209,20 @@ func (r *ReservationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	if err := r.client.AddReservation(ctx, data.Target(kea.OperationTargetDatabase), reservation); err != nil {
-		resp.Diagnostics.AddError("Error Adding Reservation", err.Error())
+	target, err := r.client.ReservationTarget(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Error Detecting Reservation Target", err.Error())
 		return
 	}
 
-	created, err := r.client.GetReservation(ctx, data.Target(kea.OperationTargetDatabase), data.BuildQuery())
+	writeErr := r.client.AddReservation(ctx, target, reservation)
+	if !applied(writeErr) {
+		resp.Diagnostics.AddError("Error Adding Reservation", writeErr.Error())
+		return
+	}
+	defer addConfigWriteError(&resp.Diagnostics, writeErr)
+
+	created, err := r.client.GetReservation(ctx, target, data.BuildQuery())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Created Reservation", err.Error())
 		return
@@ -256,27 +234,24 @@ func (r *ReservationResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	resp.Diagnostics.Append(data.FromAPI(ctx, created)...)
-	data.InSync = types.BoolValue(true)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *ReservationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data ReservationResourceModel
+	var data ReservationModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	ctx, reportDrift := driftWarnings(ctx, &resp.Diagnostics, &data.ID)
-
-	// null in state written by provider versions without operation_target
-	if data.OperationTarget.IsNull() {
-		data.OperationTarget = types.StringValue(string(kea.OperationTargetDatabase))
+	target, err := r.client.ReservationTarget(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Error Detecting Reservation Target", err.Error())
+		return
 	}
 
-	reservation, err := r.client.GetReservation(ctx, data.Target(kea.OperationTargetDatabase), data.BuildQuery())
-	data.InSync = types.BoolValue(reportDrift())
+	reservation, err := r.client.GetReservation(ctx, target, data.BuildQuery())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Reservation", err.Error())
 		return
@@ -292,7 +267,7 @@ func (r *ReservationResource) Read(ctx context.Context, req resource.ReadRequest
 }
 
 func (r *ReservationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data ReservationResourceModel
+	var data ReservationModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -305,12 +280,20 @@ func (r *ReservationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	if err := r.client.UpdateReservation(ctx, data.Target(kea.OperationTargetDatabase), reservation); err != nil {
-		resp.Diagnostics.AddError("Error Updating Reservation", err.Error())
+	target, err := r.client.ReservationTarget(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Error Detecting Reservation Target", err.Error())
 		return
 	}
 
-	updated, err := r.client.GetReservation(ctx, data.Target(kea.OperationTargetDatabase), data.BuildQuery())
+	writeErr := r.client.UpdateReservation(ctx, target, reservation)
+	if !applied(writeErr) {
+		resp.Diagnostics.AddError("Error Updating Reservation", writeErr.Error())
+		return
+	}
+	defer addConfigWriteError(&resp.Diagnostics, writeErr)
+
+	updated, err := r.client.GetReservation(ctx, target, data.BuildQuery())
 	if err != nil {
 		resp.Diagnostics.AddError("Error Reading Updated Reservation", err.Error())
 		return
@@ -322,19 +305,24 @@ func (r *ReservationResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	resp.Diagnostics.Append(data.FromAPI(ctx, updated)...)
-	data.InSync = types.BoolValue(true)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *ReservationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data ReservationResourceModel
+	var data ReservationModel
 
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	if err := r.client.DeleteReservation(ctx, data.Target(kea.OperationTargetDatabase), data.BuildQuery()); err != nil {
-		resp.Diagnostics.AddError("Error Deleting Reservation", err.Error())
+	target, err := r.client.ReservationTarget(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Error Detecting Reservation Target", err.Error())
+		return
+	}
+
+	if err := r.client.DeleteReservation(ctx, target, data.BuildQuery()); err != nil {
+		addDeleteError(&resp.Diagnostics, "Error Deleting Reservation", err)
 	}
 }

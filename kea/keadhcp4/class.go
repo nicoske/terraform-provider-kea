@@ -52,18 +52,10 @@ func (c *Client) AddClientClass(ctx context.Context, class ClientClass) error {
 	}{[]ClientClass{class}})
 }
 
-// UpdateClientClass replaces the client class with the same name, and adds it
-// to the servers that do not hold it.
 func (c *Client) UpdateClientClass(ctx context.Context, class ClientClass) error {
-	arguments := struct {
+	return c.exec(ctx, "client class updated", "class-update", struct {
 		ClientClasses []ClientClass `json:"client-classes"`
-	}{[]ClientClass{class}}
-	return c.mutate(ctx, "client class updated", func() error {
-		return c.upsert(ctx, "class-add", "class-update", arguments, func(server *Client) (bool, error) {
-			found, err := server.GetClientClass(ctx, class.Name)
-			return found != nil, err
-		})
-	})
+	}{[]ClientClass{class}})
 }
 
 func (c *Client) DeleteClientClass(ctx context.Context, name string) error {

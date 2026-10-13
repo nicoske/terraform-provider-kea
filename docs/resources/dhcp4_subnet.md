@@ -4,7 +4,7 @@ page_title: "kea_dhcp4_subnet Resource - kea"
 subcategory: ""
 description: |-
   Manages a DHCPv4 subnet in the Kea DHCP server, including its pools and DHCP options.
-  Changes apply to the running configuration of the server. Enable config_write in the provider to persist them to the configuration file.
+  Every change is saved to the configuration file of the server with config-write.
   Timers left unset (valid_lifetime, min_valid_lifetime, max_valid_lifetime, renew_timer and rebind_timer) take the value Kea derives from the global configuration.
   Important: Requires the subnet_cmds hook library.
 ---
@@ -13,7 +13,7 @@ description: |-
 
 Manages a DHCPv4 subnet in the Kea DHCP server, including its pools and DHCP options.
 
-Changes apply to the running configuration of the server. Enable `config_write` in the provider to persist them to the configuration file.
+Every change is saved to the configuration file of the server with `config-write`.
 
 Timers left unset (`valid_lifetime`, `min_valid_lifetime`, `max_valid_lifetime`, `renew_timer` and `rebind_timer`) take the value Kea derives from the global configuration.
 
@@ -138,7 +138,6 @@ resource "kea_dhcp4_subnet" "lab" {
 
 ### Read-Only
 
-- `in_sync` (Boolean) Whether every server of the provider answers the same for this resource. `false` plans an update that writes it to every server again.
 - `shared_network_name` (String) Name of the shared network the subnet belongs to, if any. Shared networks are not managed by this resource.
 
 <a id="nestedblock--option_data"></a>

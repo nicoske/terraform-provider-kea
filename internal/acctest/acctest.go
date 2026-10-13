@@ -62,6 +62,29 @@ func SkipUnlessKeaVersion(t *testing.T, constraint string) {
 	}
 }
 
+// PreCheckMemfile skips the test unless KEA_DHCP4_MEMFILE_ADDRESS points to
+// the control socket of the server configured with
+// testing/kea-dhcp4-memfile.conf, which has no hosts database.
+func PreCheckMemfile(t *testing.T) {
+	t.Helper()
+
+	if os.Getenv("KEA_DHCP4_MEMFILE_ADDRESS") == "" {
+		t.Skip("KEA_DHCP4_MEMFILE_ADDRESS must be set for acceptance tests without a hosts database")
+	}
+}
+
+// ProviderConfigMemfile configures the provider for the server of
+// PreCheckMemfile.
+func ProviderConfigMemfile() string {
+	return fmt.Sprintf(`
+provider "kea" {
+  dhcp4 = {
+    address = %q
+  }
+}
+`, os.Getenv("KEA_DHCP4_MEMFILE_ADDRESS"))
+}
+
 func ProviderConfig() string {
 	return `
 provider "kea" {}

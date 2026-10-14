@@ -53,23 +53,23 @@ func (d *ReservationDataSource) Schema(ctx context.Context, req datasource.Schem
 				Description: "Circuit ID (Option 82 sub-option 1) to identify the client. Typically inserted by relay agents. " +
 					"Mutually exclusive with other identifier types.",
 				Optional:   true,
-				CustomType: keatypes.HexIDType{},
+				CustomType: keatypes.ByteStringType{},
 			},
 			"client_id": schema.StringAttribute{
 				Description: "Client identifier (Option 61) to identify the client. Mutually exclusive with other identifier types.",
 				Optional:    true,
-				CustomType:  keatypes.HexIDType{},
+				CustomType:  keatypes.ByteStringType{},
 			},
 			"duid": schema.StringAttribute{
 				Description: "DHCP Unique Identifier. Typically used in DHCPv6 but also supported for DHCPv4. " +
 					"Mutually exclusive with other identifier types.",
 				Optional:   true,
-				CustomType: keatypes.HexIDType{},
+				CustomType: keatypes.ByteStringType{},
 			},
 			"flex_id": schema.StringAttribute{
 				Description: "Flexible identifier from the `flex_id` hook library. Mutually exclusive with other identifier types.",
 				Optional:    true,
-				CustomType:  keatypes.HexIDType{},
+				CustomType:  keatypes.ByteStringType{},
 			},
 			"hw_address": schema.StringAttribute{
 				Description: "Hardware (MAC) address to identify the client. Mutually exclusive with other identifier types.",

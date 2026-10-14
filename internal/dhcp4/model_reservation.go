@@ -24,10 +24,10 @@ import (
 type ReservationModel struct {
 	ID             types.String         `tfsdk:"id"`
 	SubnetID       types.Int64          `tfsdk:"subnet_id"`
-	CircuitID      keatypes.HexID       `tfsdk:"circuit_id"`
-	ClientID       keatypes.HexID       `tfsdk:"client_id"`
-	DUID           keatypes.HexID       `tfsdk:"duid"`
-	FlexID         keatypes.HexID       `tfsdk:"flex_id"`
+	CircuitID      keatypes.ByteString  `tfsdk:"circuit_id"`
+	ClientID       keatypes.ByteString  `tfsdk:"client_id"`
+	DUID           keatypes.ByteString  `tfsdk:"duid"`
+	FlexID         keatypes.ByteString  `tfsdk:"flex_id"`
 	HWAddress      hwtypes.MACAddress   `tfsdk:"hw_address"`
 	IPAddress      iptypes.IPv4Address  `tfsdk:"ip_address"`
 	BootFileName   types.String         `tfsdk:"boot_file_name"`
@@ -55,11 +55,11 @@ func (m *ReservationModel) ToAPI(ctx context.Context) (keadhcp4.Reservation, dia
 
 	reservation := keadhcp4.Reservation{
 		SubnetID:       uint32(m.SubnetID.ValueInt64()),
-		CircuitID:      hexID(m.CircuitID),
-		ClientID:       hexID(m.ClientID),
-		DUID:           hexID(m.DUID),
-		FlexID:         hexID(m.FlexID),
-		HWAddress:      macAddrToHexID(m.HWAddress),
+		CircuitID:      byteString(m.CircuitID),
+		ClientID:       byteString(m.ClientID),
+		DUID:           byteString(m.DUID),
+		FlexID:         byteString(m.FlexID),
+		HWAddress:      macAddrToByteString(m.HWAddress),
 		IPAddress:      ipv4Pointer(m.IPAddress),
 		BootFileName:   m.BootFileName.ValueStringPointer(),
 		Hostname:       m.Hostname.ValueStringPointer(),
@@ -94,11 +94,11 @@ func (m *ReservationModel) FromAPI(ctx context.Context, r *keadhcp4.Reservation)
 	var diags diag.Diagnostics
 
 	m.SubnetID = types.Int64Value(int64(r.SubnetID))
-	m.CircuitID = keatypes.NewHexIDPointerValue(hexIDToString(r.CircuitID))
-	m.ClientID = keatypes.NewHexIDPointerValue(hexIDToString(r.ClientID))
-	m.DUID = keatypes.NewHexIDPointerValue(hexIDToString(r.DUID))
-	m.FlexID = keatypes.NewHexIDPointerValue(hexIDToString(r.FlexID))
-	m.HWAddress = hwtypes.NewMACAddressPointerValue(hexIDToString(r.HWAddress))
+	m.CircuitID = keatypes.NewByteStringPointerValue(byteStringToString(r.CircuitID))
+	m.ClientID = keatypes.NewByteStringPointerValue(byteStringToString(r.ClientID))
+	m.DUID = keatypes.NewByteStringPointerValue(byteStringToString(r.DUID))
+	m.FlexID = keatypes.NewByteStringPointerValue(byteStringToString(r.FlexID))
+	m.HWAddress = hwtypes.NewMACAddressPointerValue(byteStringToMACAddressString(r.HWAddress))
 	m.IPAddress = iptypes.NewIPv4AddressPointerValue(addrPointerToString(r.IPAddress))
 	m.BootFileName = types.StringPointerValue(r.BootFileName)
 	m.Hostname = types.StringPointerValue(r.Hostname)
@@ -234,11 +234,11 @@ func (o *OptionDataModel) ToAPI(ctx context.Context) (keadhcp4.OptionData, diag.
 		option.Code = &code
 	}
 
-	payload, err := parseOptionPayload(o.Data, o.CSVFormat)
+	value, err := parseOptionValue(o.Data, o.CSVFormat)
 	if err != nil {
 		diags.AddError("Invalid Option Data", err.Error())
 	}
-	option.Payload = payload
+	option.Value = value
 
 	if !o.ClientClasses.IsNull() && !o.ClientClasses.IsUnknown() {
 		diags.Append(o.ClientClasses.ElementsAs(ctx, &option.ClientClasses, false)...)
@@ -258,10 +258,10 @@ func (o *OptionDataModel) FromAPI(ctx context.Context, od *keadhcp4.OptionData) 
 	}
 	o.Space = types.StringPointerValue(od.Space)
 	o.Data, o.CSVFormat = types.StringNull(), types.BoolNull()
-	switch p := od.Payload.(type) {
-	case kea.CSVPayload:
+	switch p := od.Value.(type) {
+	case kea.CSVString:
 		o.Data, o.CSVFormat = types.StringValue(string(p)), types.BoolValue(true)
-	case kea.BinaryPayload:
+	case kea.ByteString:
 		o.Data, o.CSVFormat = types.StringValue(p.String()), types.BoolValue(false)
 	}
 	o.AlwaysSend = types.BoolPointerValue(od.AlwaysSend)
@@ -278,11 +278,19 @@ func (o *OptionDataModel) FromAPI(ctx context.Context, od *keadhcp4.OptionData) 
 	return diags
 }
 
-func hexIDToString(id kea.HexID) *string {
-	if len(id) == 0 {
+func byteStringToString(k kea.ByteString) *string {
+	if len(k) == 0 {
 		return nil
 	}
-	s := id.String()
+	s := k.String()
+	return &s
+}
+
+func byteStringToMACAddressString(k kea.ByteString) *string {
+	if len(k) == 0 {
+		return nil
+	}
+	s := net.HardwareAddr(k).String()
 	return &s
 }
 
@@ -303,12 +311,12 @@ func boolPointer(b types.Bool) *bool {
 	return &r
 }
 
-func hexID(id keatypes.HexID) kea.HexID {
-	if id.IsNull() || id.IsUnknown() {
+func byteString(v keatypes.ByteString) kea.ByteString {
+	if v.IsNull() || v.IsUnknown() {
 		return nil
 	}
 
-	r, _ := id.ValueHexID()
+	r, _ := v.ValueByteString()
 	return r
 }
 
@@ -330,21 +338,21 @@ func stringPointer(s types.String) *string {
 	return &r
 }
 
-func macAddrToHexID(addr hwtypes.MACAddress) kea.HexID {
+func macAddrToByteString(addr hwtypes.MACAddress) kea.ByteString {
 	if addr.IsNull() || addr.IsUnknown() {
 		return nil
 	}
 
 	a, _ := addr.ValueMACAddress()
-	id, _ := kea.ParseHexID(a.String())
-	return id
+	k, _ := kea.ParseByteString(a.String())
+	return k
 }
 
-func parseOptionPayload(data types.String, csvFormat types.Bool) (kea.OptionPayload, error) {
+func parseOptionValue(data types.String, csvFormat types.Bool) (kea.OptionValue, error) {
 	if data.IsNull() || data.IsUnknown() {
 		return nil, nil
 	}
-	return kea.NewOptionPayload(data.ValueString(), kea.CSVFormatOf(boolPointer(csvFormat)))
+	return kea.NewOptionValue(data.ValueString(), kea.CSVFormatOf(boolPointer(csvFormat)))
 }
 
 func ParseReservationID(id string) (map[string]any, diag.Diagnostic) {
@@ -362,14 +370,11 @@ func ParseReservationID(id string) (map[string]any, diag.Diagnostic) {
 	result["subnet_id"] = subnetID
 
 	switch parts[1] {
-	case "circuit-id":
-		result["circuit_id"] = parts[2]
-	case "client-id":
-		result["client_id"] = parts[2]
-	case "duid":
-		result["duid"] = parts[2]
-	case "flex-id":
-		result["flex_id"] = parts[2]
+	case "circuit-id", "client-id", "duid", "flex-id":
+		if _, err := kea.ParseByteString(parts[2]); err != nil {
+			return nil, diag.NewErrorDiagnostic("Error Parsing Reservation ID", fmt.Sprintf("Invalid '%s' identifier: %s", parts[1], err))
+		}
+		result[strings.ReplaceAll(parts[1], "-", "_")] = parts[2]
 	case "hw-address":
 		_, err := net.ParseMAC(parts[2])
 		if err != nil {

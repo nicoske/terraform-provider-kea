@@ -18,11 +18,11 @@ type Subnet struct {
 type Reservation struct {
 	SubnetID uint32 `json:"subnet-id"`
 
-	CircuitID kea.HexID `json:"circuit-id,omitempty"`
-	ClientID  kea.HexID `json:"client-id,omitempty"`
-	DUID      kea.HexID `json:"duid,omitempty"`
-	FlexID    kea.HexID `json:"flex-id,omitempty"`
-	HWAddress kea.HexID `json:"hw-address,omitempty"`
+	CircuitID kea.ByteString `json:"circuit-id,omitempty"`
+	ClientID  kea.ByteString `json:"client-id,omitempty"`
+	DUID      kea.ByteString `json:"duid,omitempty"`
+	FlexID    kea.ByteString `json:"flex-id,omitempty"`
+	HWAddress kea.ByteString `json:"hw-address,omitempty"`
 
 	BootFileName   *string          `json:"boot-file-name,omitempty"`
 	ClientClasses  []string         `json:"client-classes,omitempty"`
@@ -35,13 +35,13 @@ type Reservation struct {
 }
 
 type OptionData struct {
-	Name          *string           `json:"name,omitempty"`
-	Code          *uint8            `json:"code,omitempty"`
-	Space         *string           `json:"space,omitempty"`
-	Payload       kea.OptionPayload `json:"-"`
-	AlwaysSend    *bool             `json:"always-send,omitempty"`
-	NeverSend     *bool             `json:"never-send,omitempty"`
-	ClientClasses []string          `json:"client-classes,omitempty"`
+	Name          *string         `json:"name,omitempty"`
+	Code          *uint8          `json:"code,omitempty"`
+	Space         *string         `json:"space,omitempty"`
+	Value         kea.OptionValue `json:"-"`
+	AlwaysSend    *bool           `json:"always-send,omitempty"`
+	NeverSend     *bool           `json:"never-send,omitempty"`
+	ClientClasses []string        `json:"client-classes,omitempty"`
 }
 
 type optionDataWire struct {
@@ -52,16 +52,16 @@ type optionDataWire struct {
 func (o OptionData) MarshalJSON() ([]byte, error) {
 	type alias OptionData
 	var wire optionDataWire
-	switch p := o.Payload.(type) {
+	switch p := o.Value.(type) {
 	case nil:
-	case kea.CSVPayload:
+	case kea.CSVString:
 		wire.Data, wire.CSVFormat = new(string(p)), new(true)
-	case kea.BinaryPayload:
+	case kea.ByteString:
 		wire.Data, wire.CSVFormat = new(p.String()), new(false)
-	case kea.UnresolvedPayload:
+	case kea.UnresolvedString:
 		wire.Data = new(string(p))
 	default:
-		return nil, fmt.Errorf("unsupported option payload %T", p)
+		return nil, fmt.Errorf("unsupported option value %T", p)
 	}
 	return json.Marshal(struct {
 		alias
@@ -80,7 +80,7 @@ func (o *OptionData) UnmarshalJSON(b []byte) error {
 	}
 
 	if aux.Data == nil {
-		o.Payload = nil
+		o.Value = nil
 		return nil
 	}
 
@@ -90,11 +90,11 @@ func (o *OptionData) UnmarshalJSON(b []byte) error {
 		format = kea.CSVFormatCSV
 	}
 
-	p, err := kea.NewOptionPayload(*aux.Data, format)
+	p, err := kea.NewOptionValue(*aux.Data, format)
 	if err != nil {
 		return err
 	}
-	o.Payload = p
+	o.Value = p
 	return nil
 }
 

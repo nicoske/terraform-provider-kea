@@ -65,7 +65,7 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 				Description: "Circuit ID (Option 82 sub-option 1) to identify the client. Typically inserted by relay agents. " +
 					"Mutually exclusive with other identifier types.",
 				Optional:   true,
-				CustomType: keatypes.HexIDType{},
+				CustomType: keatypes.ByteStringType{},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 				},
@@ -73,7 +73,7 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 			"client_id": schema.StringAttribute{
 				Description: "Client identifier (Option 61) to identify the client. Mutually exclusive with other identifier types.",
 				Optional:    true,
-				CustomType:  keatypes.HexIDType{},
+				CustomType:  keatypes.ByteStringType{},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 				},
@@ -82,7 +82,7 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 				Description: "DHCP Unique Identifier. Typically used in DHCPv6 but also supported for DHCPv4. " +
 					"Mutually exclusive with other identifier types.",
 				Optional:   true,
-				CustomType: keatypes.HexIDType{},
+				CustomType: keatypes.ByteStringType{},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 				},
@@ -90,7 +90,7 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 			"flex_id": schema.StringAttribute{
 				Description: "Flexible identifier from the `flex_id` hook library. Mutually exclusive with other identifier types.",
 				Optional:    true,
-				CustomType:  keatypes.HexIDType{},
+				CustomType:  keatypes.ByteStringType{},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIfConfigured(),
 				},
@@ -189,7 +189,7 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 						},
 					},
 					Validators: []validator.Object{
-						optionPayloadValidator{},
+						optionValueValidator{},
 						objectvalidator.AtLeastOneOf(
 							path.MatchRoot("name"),
 							path.MatchRoot("code"),

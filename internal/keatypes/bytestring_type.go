@@ -10,35 +10,35 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
-var _ basetypes.StringTypable = (*HexIDType)(nil)
+var _ basetypes.StringTypable = (*ByteStringType)(nil)
 
-type HexIDType struct {
+type ByteStringType struct {
 	basetypes.StringType
 }
 
-func (t HexIDType) String() string {
-	return "keatypes.HexIDType"
+func (t ByteStringType) String() string {
+	return "keatypes.ByteStringType"
 }
 
-func (t HexIDType) ValueType(ctx context.Context) attr.Value {
-	return HexIDValue{}
+func (t ByteStringType) ValueType(ctx context.Context) attr.Value {
+	return ByteStringValue{}
 }
 
-func (t HexIDType) Equal(o attr.Type) bool {
-	other, ok := o.(HexIDType)
+func (t ByteStringType) Equal(o attr.Type) bool {
+	other, ok := o.(ByteStringType)
 	if !ok {
 		return false
 	}
 	return t.StringType.Equal(other.StringType)
 }
 
-func (t HexIDType) ValueFromString(ctx context.Context, in basetypes.StringValue) (basetypes.StringValuable, diag.Diagnostics) {
-	return HexIDValue{
+func (t ByteStringType) ValueFromString(ctx context.Context, in basetypes.StringValue) (basetypes.StringValuable, diag.Diagnostics) {
+	return ByteStringValue{
 		StringValue: in,
 	}, nil
 }
 
-func (t HexIDType) ValueFromTerraform(ctx context.Context, in tftypes.Value) (attr.Value, error) {
+func (t ByteStringType) ValueFromTerraform(ctx context.Context, in tftypes.Value) (attr.Value, error) {
 	attrValue, err := t.StringType.ValueFromTerraform(ctx, in)
 	if err != nil {
 		return nil, err

@@ -80,6 +80,28 @@ func TestAccReservation_withCircuitID(t *testing.T) {
 	})
 }
 
+func TestAccReservation_withQuotedCircuitID(t *testing.T) {
+	circuitID := "'charter950'"
+	ip := "10.67.0.72"
+	resourceName := "kea_dhcp4_reservation.test"
+	query := keaquery.ReservationByIdentifier(1, "circuit-id", "63686172746572393530")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationConfig_withCircuitID(1, circuitID, ip),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "circuit_id", circuitID),
+					resource.TestCheckResourceAttr(resourceName, "ip_address", ip),
+					resource.TestCheckResourceAttrSet(resourceName, "id"),
+				),
+				PostApplyFunc: testAccCheckReservationExists(t, query),
+			},
+		},
+	})
+}
+
 func TestAccReservation_withDUID(t *testing.T) {
 	duid := "00:03:00:01:de:ad:be:ef:ca:fe"
 	ip := "10.67.0.75"

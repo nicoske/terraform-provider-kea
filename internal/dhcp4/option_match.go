@@ -15,7 +15,7 @@ func describes(want, have keadhcp4.OptionData) bool {
 		optionalEqual(want.Space, have.Space) &&
 		optionalEqual(want.AlwaysSend, have.AlwaysSend) &&
 		optionalEqual(want.NeverSend, have.NeverSend) &&
-		kea.PayloadDescribes(want.Payload, have.Payload) &&
+		kea.ValueDescribes(want.Value, have.Value) &&
 		sameClasses(want.ClientClasses, have.ClientClasses)
 }
 

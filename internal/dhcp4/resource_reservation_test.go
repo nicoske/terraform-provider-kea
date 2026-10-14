@@ -1,14 +1,18 @@
 package dhcp4_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
+	"net"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/wfdewith/terraform-provider-kea/internal/acctest"
 	"github.com/wfdewith/terraform-provider-kea/kea"
 	"github.com/wfdewith/terraform-provider-kea/kea/keaquery"
@@ -765,6 +769,94 @@ func TestAccReservation_import(t *testing.T) {
 				ResourceName:      resourceName,
 				ImportState:       true,
 				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccReservation_importNonCanonicalMAC(t *testing.T) {
+	mac := "02:0d:1e:2f:3a:4b"
+	upperMAC := strings.ToUpper(mac)
+	ip := "10.67.0.58"
+	resourceName := "kea_dhcp4_reservation.test"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationConfig_basic(1, mac, ip),
+			},
+			{
+				ResourceName:            resourceName,
+				ImportState:             true,
+				ImportStateId:           fmt.Sprintf("1/hw-address/%s", upperMAC),
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"hw_address"},
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected 1 imported resource, got %d", len(states))
+					}
+
+					attributes := states[0].Attributes
+
+					got, err := net.ParseMAC(attributes["hw_address"])
+					if err != nil {
+						return fmt.Errorf("imported hw_address %q is not a valid MAC: %w", attributes["hw_address"], err)
+					}
+					want, err := net.ParseMAC(mac)
+					if err != nil {
+						return fmt.Errorf("test MAC %q is not valid: %w", mac, err)
+					}
+					if !bytes.Equal(got, want) {
+						return fmt.Errorf("imported hw_address %q is not equivalent to %q", attributes["hw_address"], mac)
+					}
+
+					return nil
+				},
+			},
+		},
+	})
+}
+
+func TestAccReservation_importNonCanonicalClientID(t *testing.T) {
+	clientID := "0a:0b:0c:0d"
+	upperClientID := strings.ToUpper(clientID)
+	ip := "10.67.0.59"
+	resourceName := "kea_dhcp4_reservation.test"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationConfig_withClientID(1, clientID, ip),
+			},
+			{
+				ResourceName:            resourceName,
+				ImportState:             true,
+				ImportStateId:           fmt.Sprintf("1/client-id/%s", upperClientID),
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"client_id"},
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected 1 imported resource, got %d", len(states))
+					}
+
+					attributes := states[0].Attributes
+
+					got, err := kea.ParseByteString(attributes["client_id"])
+					if err != nil {
+						return fmt.Errorf("imported client_id %q is not a valid byte string: %w", attributes["client_id"], err)
+					}
+					want, err := kea.ParseByteString(clientID)
+					if err != nil {
+						return fmt.Errorf("test client_id %q is not valid: %w", clientID, err)
+					}
+					if !bytes.Equal(got, want) {
+						return fmt.Errorf("imported client_id %q is not equivalent to %q", attributes["client_id"], clientID)
+					}
+
+					return nil
+				},
 			},
 		},
 	})

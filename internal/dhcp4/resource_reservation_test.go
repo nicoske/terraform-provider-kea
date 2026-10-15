@@ -173,6 +173,44 @@ func TestAccReservation_withHostname(t *testing.T) {
 	})
 }
 
+func TestAccReservation_nextServerZero(t *testing.T) {
+	mac := "02:f8:c2:5d:19:a7"
+	ip := "10.67.0.143"
+	resourceName := "kea_dhcp4_reservation.test"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationConfig_withNextServer(1, mac, ip, "0.0.0.0"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "next_server", "0.0.0.0"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccReservation_explicitEmptyStrings(t *testing.T) {
+	mac := "02:f8:c2:5d:19:a8"
+	ip := "10.67.0.144"
+	resourceName := "kea_dhcp4_reservation.test"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationConfig_emptyStrings(1, mac, ip),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "hostname", ""),
+					resource.TestCheckResourceAttr(resourceName, "server_hostname", ""),
+					resource.TestCheckResourceAttr(resourceName, "boot_file_name", ""),
+				),
+			},
+		},
+	})
+}
+
 func TestAccReservation_withOptionData(t *testing.T) {
 	mac := "02:6b:d9:31:84:cf"
 	ip := "10.67.0.27"
@@ -1024,6 +1062,34 @@ resource "kea_dhcp4_reservation" "test" {
   hostname   = %q
 }
 `, acctest.ProviderConfig(), subnetID, mac, ip, hostname)
+}
+
+func testAccReservationConfig_withNextServer(subnetID uint32, mac, ip, nextServer string) string {
+	return fmt.Sprintf(`
+%s
+
+resource "kea_dhcp4_reservation" "test" {
+  subnet_id   = %d
+  hw_address  = %q
+  ip_address  = %q
+  next_server = %q
+}
+`, acctest.ProviderConfig(), subnetID, mac, ip, nextServer)
+}
+
+func testAccReservationConfig_emptyStrings(subnetID uint32, mac, ip string) string {
+	return fmt.Sprintf(`
+%s
+
+resource "kea_dhcp4_reservation" "test" {
+  subnet_id       = %d
+  hw_address      = %q
+  ip_address      = %q
+  hostname        = ""
+  server_hostname = ""
+  boot_file_name  = ""
+}
+`, acctest.ProviderConfig(), subnetID, mac, ip)
 }
 
 func testAccReservationConfig_withOptionData(subnetID uint32, mac, ip string) string {

@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -113,6 +114,8 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 			"boot_file_name": schema.StringAttribute{
 				Description: "Boot file name for network booting (`file` field in DHCP packet, Option 67).",
 				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
 			},
 			"client_classes": schema.SetAttribute{
 				Description: "Client classes to assign to this client.",
@@ -122,15 +125,21 @@ func (r *ReservationResource) Schema(ctx context.Context, req resource.SchemaReq
 			"hostname": schema.StringAttribute{
 				Description: "Hostname to assign to the client.",
 				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
 			},
 			"next_server": schema.StringAttribute{
 				Description: "Next server address for network booting (`siaddr` field in DHCP packet).",
 				Optional:    true,
+				Computed:    true,
 				CustomType:  iptypes.IPv4AddressType{},
+				Default:     stringdefault.StaticString("0.0.0.0"),
 			},
 			"server_hostname": schema.StringAttribute{
 				Description: "Server hostname for network booting (`sname` field in DHCP packet).",
 				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
 			},
 			"user_context": schema.StringAttribute{
 				Description: "Arbitrary JSON data stored with this reservation.",

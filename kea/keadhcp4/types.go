@@ -97,36 +97,3 @@ func (o *OptionData) UnmarshalJSON(b []byte) error {
 	o.Value = p
 	return nil
 }
-
-func (r *Reservation) UnmarshalJSON(data []byte) error {
-	type Alias Reservation
-	aux := &struct {
-		*Alias
-	}{
-		Alias: (*Alias)(r),
-	}
-
-	if err := json.Unmarshal(data, aux); err != nil {
-		return err
-	}
-
-	// The Kea API returns these fields as empty strings when not set,
-	// rather than omitting them from the response.
-	r.BootFileName = nilIfEmpty(r.BootFileName)
-	r.Hostname = nilIfEmpty(r.Hostname)
-	r.ServerHostname = nilIfEmpty(r.ServerHostname)
-
-	// The Kea API returns "0.0.0.0" for next-server when not set.
-	if r.NextServer != nil && (!r.NextServer.IsValid() || r.NextServer.IsUnspecified()) {
-		r.NextServer = nil
-	}
-
-	return nil
-}
-
-func nilIfEmpty(s *string) *string {
-	if s == nil || *s == "" {
-		return nil
-	}
-	return s
-}

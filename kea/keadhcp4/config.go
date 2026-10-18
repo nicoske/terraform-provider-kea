@@ -15,6 +15,23 @@ func (c *Client) ConfigWrite(ctx context.Context, filename string) error {
 	}{filename})
 }
 
+// ConfigHash returns the SHA-256 hash of the running configuration.
+func (c *Client) ConfigHash(ctx context.Context) (string, error) {
+	result, err := kea.ExecWithResponse[struct {
+		Hash string `json:"hash"`
+	}](ctx, c.transport, "config-hash-get", struct{}{})
+
+	if err != nil {
+		return "", err
+	}
+
+	if result == nil {
+		return "", nil
+	}
+
+	return result.Hash, nil
+}
+
 func (c *Client) hasHostsDatabase(ctx context.Context) (bool, error) {
 	result, err := kea.ExecWithResponse[struct {
 		Dhcp4 struct {

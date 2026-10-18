@@ -15,6 +15,7 @@ type Client struct {
 
 	mu      sync.Mutex
 	version *version.Version
+	target  kea.OperationTarget
 }
 
 // ClientOption configures optional behaviour of a Client.
@@ -78,4 +79,27 @@ func (c *Client) exec(ctx context.Context, done, command string, arguments any) 
 		return &ConfigWriteError{Done: done, Err: err}
 	}
 	return nil
+}
+
+// ReservationTarget returns the operation target for reservation commands:
+// the hosts database when the server has one, otherwise its running
+// configuration, which config-write saves to disk.
+func (c *Client) ReservationTarget(ctx context.Context) (kea.OperationTarget, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.target != "" {
+		return c.target, nil
+	}
+
+	hasDatabase, err := c.hasHostsDatabase(ctx)
+	if err != nil {
+		return "", fmt.Errorf("detecting hosts database: %w", err)
+	}
+
+	c.target = kea.OperationTargetMemory
+	if hasDatabase {
+		c.target = kea.OperationTargetDatabase
+	}
+	return c.target, nil
 }

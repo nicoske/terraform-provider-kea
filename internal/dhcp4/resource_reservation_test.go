@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/wfdewith/terraform-provider-kea/internal/acctest"
 	"github.com/wfdewith/terraform-provider-kea/kea"
+	"github.com/wfdewith/terraform-provider-kea/kea/keadhcp4"
 	"github.com/wfdewith/terraform-provider-kea/kea/keaquery"
 )
 
@@ -34,7 +36,54 @@ func TestAccReservation_basic(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "ip_address", ip),
 					resource.TestCheckResourceAttrSet(resourceName, "id"),
 				),
-				PostApplyFunc: testAccCheckReservationExists(t, query),
+				// The test server has a hosts database
+				PostApplyFunc: func() {
+					testAccCheckReservationExists(t, query)()
+					testAccCheckReservationNotIn(t, acctest.NewClient(t), kea.OperationTargetMemory, query)()
+				},
+			},
+		},
+	})
+}
+
+func TestAccReservation_withoutHostsDatabase(t *testing.T) {
+	mac := "02:3c:5e:a1:07:e1"
+	ip := "10.67.0.84"
+	resourceName := "kea_dhcp4_reservation.test"
+	query := keaquery.ReservationByIdentifier(1, "hw-address", mac)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheckMemfile(t) },
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccReservationConfig_memfile(1, mac, ip),
+				Check:  resource.TestCheckResourceAttr(resourceName, "ip_address", ip),
+				PostApplyFunc: func() {
+					reservation, err := testAccMemfileClient().GetReservation(context.Background(), kea.OperationTargetMemory, query)
+					if err != nil {
+						t.Fatalf("failed to get reservation: %v", err)
+					}
+					if reservation == nil {
+						t.Fatal("reservation does not exist in Kea")
+					}
+				},
+			},
+			{
+				Config: testAccReservationConfig_memfile(1, mac, ip),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateId:     fmt.Sprintf("1/hw-address/%s", mac),
+				ImportStateVerify: true,
+			},
+			{
+				Config:        acctest.ProviderConfigMemfile(),
+				PostApplyFunc: testAccCheckReservationNotIn(t, testAccMemfileClient(), kea.OperationTargetAll, query),
 			},
 		},
 	})
@@ -975,6 +1024,24 @@ func testAccCheckReservationDestroyed(t *testing.T, query keaquery.ReservationQu
 	}
 }
 
+func testAccCheckReservationNotIn(t *testing.T, client *keadhcp4.Client, target kea.OperationTarget, query keaquery.ReservationQuery) func() {
+	return func() {
+		reservation, err := client.GetReservation(context.Background(), target, query)
+		if err != nil {
+			t.Fatalf("failed to check reservation: %v", err)
+		}
+
+		if reservation != nil {
+			t.Fatalf("reservation found with target %s", target)
+		}
+	}
+}
+
+// testAccMemfileClient queries the server of acctest.PreCheckMemfile.
+func testAccMemfileClient() *keadhcp4.Client {
+	return keadhcp4.NewClient(&kea.HTTPTransport{Endpoint: os.Getenv("KEA_DHCP4_MEMFILE_ADDRESS")})
+}
+
 func testAccCheckReservationReplaced(t *testing.T, before, after keaquery.ReservationQuery) func() {
 	return func() {
 		testAccCheckReservationDestroyed(t, before)()
@@ -1226,4 +1293,14 @@ resource "kea_dhcp4_reservation" "test" {
   })
 }
 `, acctest.ProviderConfig(), subnetID, mac, ip)
+}
+
+func testAccReservationConfig_memfile(subnetID uint32, mac, ip string) string {
+	return acctest.ProviderConfigMemfile() + fmt.Sprintf(`
+resource "kea_dhcp4_reservation" "test" {
+  subnet_id  = %d
+  hw_address = %q
+  ip_address = %q
+}
+`, subnetID, mac, ip)
 }

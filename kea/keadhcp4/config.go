@@ -14,3 +14,22 @@ func (c *Client) ConfigWrite(ctx context.Context, filename string) error {
 		Filename string `json:"filename,omitempty"`
 	}{filename})
 }
+
+func (c *Client) hasHostsDatabase(ctx context.Context) (bool, error) {
+	result, err := kea.ExecWithResponse[struct {
+		Dhcp4 struct {
+			HostsDatabase  map[string]any   `json:"hosts-database"`
+			HostsDatabases []map[string]any `json:"hosts-databases"`
+		} `json:"Dhcp4"`
+	}](ctx, c.transport, "config-get", struct{}{})
+
+	if err != nil {
+		return false, err
+	}
+
+	if result == nil {
+		return false, nil
+	}
+
+	return len(result.Dhcp4.HostsDatabase) > 0 || len(result.Dhcp4.HostsDatabases) > 0, nil
+}

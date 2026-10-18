@@ -2,6 +2,7 @@ package keadhcp4_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"testing"
@@ -25,6 +26,10 @@ func (f *fakeServer) Send(ctx context.Context, req kea.CommandRequest, resp *kea
 	}
 	*resp = kea.CommandResponse{Result: kea.ResultSuccess}
 	return nil
+}
+
+func configGet(dhcp4 string) kea.CommandResponse {
+	return kea.CommandResponse{Result: kea.ResultSuccess, Arguments: json.RawMessage(`{"Dhcp4":` + dhcp4 + `,"hash":"x"}`)}
 }
 
 func failing(command string) kea.CommandResponse {
@@ -81,5 +86,54 @@ func TestClient_noConfigWriteForDatabaseReservation(t *testing.T) {
 	}
 	if want := []string{"reservation-del"}; !slices.Equal(server.commands, want) {
 		t.Fatalf("commands: %v, expected %v", server.commands, want)
+	}
+}
+
+func TestClient_reservationTarget(t *testing.T) {
+	cases := map[string]struct {
+		dhcp4 string
+		want  kea.OperationTarget
+	}{
+		"hosts-database":        {`{"hosts-database":{"type":"postgresql"}}`, kea.OperationTargetDatabase},
+		"hosts-databases":       {`{"hosts-databases":[{"type":"postgresql"}]}`, kea.OperationTargetDatabase},
+		"empty hosts-databases": {`{"hosts-databases":[]}`, kea.OperationTargetMemory},
+		"no hosts database":     {`{"lease-database":{"type":"memfile"}}`, kea.OperationTargetMemory},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			server := &fakeServer{answers: map[string]kea.CommandResponse{"config-get": configGet(tc.dhcp4)}}
+			client := keadhcp4.NewClient(server)
+
+			for range 2 {
+				target, err := client.ReservationTarget(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if target != tc.want {
+					t.Fatalf("target: %s, expected %s", target, tc.want)
+				}
+			}
+			if want := []string{"config-get"}; !slices.Equal(server.commands, want) {
+				t.Fatalf("commands: %v, expected %v", server.commands, want)
+			}
+		})
+	}
+}
+
+func TestClient_reservationTargetErrorNotCached(t *testing.T) {
+	server := &fakeServer{answers: map[string]kea.CommandResponse{"config-get": failing("config-get")}}
+	client := keadhcp4.NewClient(server)
+
+	if _, err := client.ReservationTarget(context.Background()); err == nil {
+		t.Fatal("expected an error")
+	}
+
+	server.answers["config-get"] = configGet(`{}`)
+	target, err := client.ReservationTarget(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target != kea.OperationTargetMemory {
+		t.Fatalf("target: %s, expected memory", target)
 	}
 }

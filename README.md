@@ -32,6 +32,9 @@ channel. You must configure either:
 control sockets on the DHCP services themselves. Configure the `http` hook
 library directly on your `kea-dhcp4` (or `kea-dhcp6`) service instead.
 
+Host reservations need the `host_cmds` hook library. They go to the hosts
+database when the server has one, otherwise to its configuration file.
+
 See [`testing/kea-dhcp4.conf`](testing/kea-dhcp4.conf) for a working example of
 control socket and hook library configuration.
 

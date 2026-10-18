@@ -158,6 +158,7 @@ func (p *KeaProvider) DataSources(_ context.Context) []func() datasource.DataSou
 	return []func() datasource.DataSource{
 		func() datasource.DataSource { return &dhcp4.ClientClassDataSource{} },
 		func() datasource.DataSource { return &dhcp4.ReservationDataSource{} },
+		func() datasource.DataSource { return &dhcp4.SubnetDataSource{} },
 	}
 }
 

@@ -25,7 +25,9 @@ func TestAccClientClass_basic(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "name", name),
 					resource.TestCheckResourceAttr(resourceName, "test", test),
 					resource.TestCheckResourceAttr(resourceName, "only_in_additional_list", "false"),
-					resource.TestCheckNoResourceAttr(resourceName, "next_server"),
+					resource.TestCheckResourceAttr(resourceName, "next_server", "0.0.0.0"),
+					resource.TestCheckResourceAttr(resourceName, "server_hostname", ""),
+					resource.TestCheckResourceAttr(resourceName, "boot_file_name", ""),
 				),
 				PostApplyFunc: testAccCheckClientClassExists(t, name),
 			},
@@ -65,6 +67,43 @@ func TestAccClientClass_full(t *testing.T) {
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
+			},
+		},
+	})
+}
+
+func TestAccClientClass_nextServerZero(t *testing.T) {
+	name := "acc-class-next-server-zero"
+	resourceName := "kea_dhcp4_client_class.test"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccClientClassConfig_withNextServer(name, "0.0.0.0"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "next_server", "0.0.0.0"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccClientClass_explicitEmptyStrings(t *testing.T) {
+	name := "acc-class-empty-strings"
+	resourceName := "kea_dhcp4_client_class.test"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccClientClassConfig_emptyStrings(name),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "server_hostname", ""),
+					resource.TestCheckResourceAttr(resourceName, "boot_file_name", ""),
+					resource.TestCheckResourceAttr(resourceName, "option_def.0.record_types", ""),
+					resource.TestCheckResourceAttr(resourceName, "option_def.0.encapsulate", ""),
+				),
 			},
 		},
 	})
@@ -122,7 +161,8 @@ func TestAccClientClass_withOptionDef(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "option_def.0.record_types", "uint8, string"),
 					resource.TestCheckResourceAttr(resourceName, "option_def.0.array", "false"),
 					resource.TestCheckResourceAttr(resourceName, "option_def.0.space", "dhcp4"),
-					resource.TestCheckNoResourceAttr(resourceName, "option_def.0.encapsulate"),
+					resource.TestCheckResourceAttr(resourceName, "option_def.0.encapsulate", ""),
+					resource.TestCheckResourceAttr(resourceName, "option_def.1.record_types", ""),
 					resource.TestCheckResourceAttr(resourceName, "option_def.1.name", "acc-array"),
 					resource.TestCheckResourceAttr(resourceName, "option_def.1.array", "true"),
 					resource.TestCheckResourceAttr(resourceName, "option_data.#", "2"),
@@ -385,6 +425,37 @@ resource "kea_dhcp4_client_class" "test" {
   test = %q
 }
 `, acctest.ProviderConfig(), name, test)
+}
+
+func testAccClientClassConfig_withNextServer(name, nextServer string) string {
+	return fmt.Sprintf(`
+%s
+
+resource "kea_dhcp4_client_class" "test" {
+  name        = %q
+  next_server = %q
+}
+`, acctest.ProviderConfig(), name, nextServer)
+}
+
+func testAccClientClassConfig_emptyStrings(name string) string {
+	return fmt.Sprintf(`
+%s
+
+resource "kea_dhcp4_client_class" "test" {
+  name            = %q
+  server_hostname = ""
+  boot_file_name  = ""
+
+  option_def {
+    name         = "acc-empty-strings"
+    code         = 236
+    type         = "uint8"
+    record_types = ""
+    encapsulate  = ""
+  }
+}
+`, acctest.ProviderConfig(), name)
 }
 
 func testAccClientClassConfig_templateTest(name, templateTest string) string {

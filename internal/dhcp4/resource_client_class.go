@@ -93,15 +93,21 @@ func (r *ClientClassResource) Schema(ctx context.Context, req resource.SchemaReq
 			"boot_file_name": schema.StringAttribute{
 				Description: "Boot file name for network booting (`file` field in DHCP packet, Option 67).",
 				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
 			},
 			"next_server": schema.StringAttribute{
 				Description: "Next server address for network booting (`siaddr` field in DHCP packet).",
 				Optional:    true,
+				Computed:    true,
 				CustomType:  iptypes.IPv4AddressType{},
+				Default:     stringdefault.StaticString("0.0.0.0"),
 			},
 			"server_hostname": schema.StringAttribute{
 				Description: "Server hostname for network booting (`sname` field in DHCP packet).",
 				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
 			},
 			"valid_lifetime": schema.Int64Attribute{
 				Description: "Lease lifetime in seconds for clients in this class.",
@@ -160,6 +166,8 @@ func (r *ClientClassResource) Schema(ctx context.Context, req resource.SchemaReq
 						"record_types": schema.StringAttribute{
 							Description: "Comma-separated field types when `type` is `record`.",
 							Optional:    true,
+							Computed:    true,
+							Default:     stringdefault.StaticString(""),
 						},
 						"space": schema.StringAttribute{
 							Description: "Option space. Defaults to `dhcp4`.",
@@ -170,6 +178,8 @@ func (r *ClientClassResource) Schema(ctx context.Context, req resource.SchemaReq
 						"encapsulate": schema.StringAttribute{
 							Description: "Option space encapsulated by this option.",
 							Optional:    true,
+							Computed:    true,
+							Default:     stringdefault.StaticString(""),
 						},
 					},
 				},

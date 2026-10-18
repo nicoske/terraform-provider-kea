@@ -49,8 +49,8 @@ func TestAccClientClassDataSource_static(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "name", acctest.StaticClientClass),
 					resource.TestCheckResourceAttr(resourceName, "test", "option[60].text == 'static'"),
 					resource.TestCheckResourceAttr(resourceName, "next_server", "10.67.0.5"),
-					resource.TestCheckNoResourceAttr(resourceName, "boot_file_name"),
-					resource.TestCheckNoResourceAttr(resourceName, "server_hostname"),
+					resource.TestCheckResourceAttr(resourceName, "boot_file_name", ""),
+					resource.TestCheckResourceAttr(resourceName, "server_hostname", ""),
 					resource.TestCheckResourceAttr(resourceName, "option_data.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs(resourceName, "option_data.*", map[string]string{
 						"name": "domain-name",

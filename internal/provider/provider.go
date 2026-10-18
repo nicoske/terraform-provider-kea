@@ -150,6 +150,7 @@ func (p *KeaProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		func() resource.Resource { return &dhcp4.ClientClassResource{} },
 		func() resource.Resource { return &dhcp4.ReservationResource{} },
+		func() resource.Resource { return &dhcp4.SubnetResource{} },
 	}
 }
 

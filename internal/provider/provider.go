@@ -148,6 +148,7 @@ func (p *KeaProvider) Configure(ctx context.Context, req provider.ConfigureReque
 
 func (p *KeaProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		func() resource.Resource { return &dhcp4.ClientClassResource{} },
 		func() resource.Resource { return &dhcp4.ReservationResource{} },
 	}
 }

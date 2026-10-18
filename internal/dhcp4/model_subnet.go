@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"net/netip"
 	"slices"
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
@@ -102,7 +103,7 @@ func (m *SubnetModel) ToAPI(ctx context.Context) (keadhcp4.Subnet, diag.Diagnost
 	if !m.Relay.IsNull() && !m.Relay.IsUnknown() {
 		var addresses []iptypes.IPv4Address
 		diags.Append(m.Relay.ElementsAs(ctx, &addresses, false)...)
-		relay := keadhcp4.Relay{}
+		relay := keadhcp4.Relay{IPAddresses: []netip.Addr{}}
 		for _, a := range addresses {
 			if ip := ipv4Pointer(a); ip != nil {
 				relay.IPAddresses = append(relay.IPAddresses, *ip)
@@ -166,8 +167,8 @@ func (m *SubnetModel) FromAPI(ctx context.Context, s *keadhcp4.Subnet) diag.Diag
 	m.EvaluateAdditionalClasses, d = stringSetFromAPI(ctx, s.EvaluateAdditionalClasses)
 	diags.Append(d...)
 
-	if s.Relay != nil && len(s.Relay.IPAddresses) > 0 {
-		var addresses []attr.Value
+	if s.Relay != nil {
+		addresses := []attr.Value{}
 		for _, a := range s.Relay.IPAddresses {
 			addresses = append(addresses, iptypes.NewIPv4AddressValue(a.String()))
 		}

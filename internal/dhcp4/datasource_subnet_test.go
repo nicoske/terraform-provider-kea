@@ -68,7 +68,7 @@ func TestAccSubnetDataSource_static(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "interface", "dummy0"),
 					resource.TestCheckResourceAttr(resourceName, "pools.#", "1"),
 					resource.TestCheckResourceAttr(resourceName, "pools.0.pool", "10.67.0.100-10.67.0.200"),
-					resource.TestCheckNoResourceAttr(resourceName, "relay"),
+					resource.TestCheckResourceAttr(resourceName, "relay.#", "0"),
 					resource.TestCheckNoResourceAttr(resourceName, "next_server"),
 					resource.TestCheckTypeSetElemNestedAttrs(resourceName, "option_data.*", map[string]string{
 						"name": "routers",

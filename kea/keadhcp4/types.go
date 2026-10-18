@@ -217,41 +217,6 @@ func (d *OptionDef) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (s *Subnet) UnmarshalJSON(data []byte) error {
-	type Alias Subnet
-	aux := &struct {
-		*Alias
-	}{
-		Alias: (*Alias)(s),
-	}
-
-	if err := json.Unmarshal(data, aux); err != nil {
-		return err
-	}
-
-	// The Kea API returns these fields as empty strings when not set,
-	// rather than omitting them from the response.
-	s.SharedNetworkName = nilIfEmpty(s.SharedNetworkName)
-	s.Interface = nilIfEmpty(s.Interface)
-	s.ServerHostname = nilIfEmpty(s.ServerHostname)
-	s.BootFileName = nilIfEmpty(s.BootFileName)
-	s.DDNSReplaceClientName = nilIfEmpty(s.DDNSReplaceClientName)
-	s.DDNSGeneratedPrefix = nilIfEmpty(s.DDNSGeneratedPrefix)
-	s.DDNSQualifyingSuffix = nilIfEmpty(s.DDNSQualifyingSuffix)
-
-	// Kea treats a next-server of "0.0.0.0" as unset.
-	if s.NextServer != nil && (!s.NextServer.IsValid() || s.NextServer.IsUnspecified()) {
-		s.NextServer = nil
-	}
-
-	// The Kea API always returns relay, with an empty address list when not set.
-	if s.Relay != nil && len(s.Relay.IPAddresses) == 0 {
-		s.Relay = nil
-	}
-
-	return nil
-}
-
 func nilIfEmpty(s *string) *string {
 	if s == nil || *s == "" {
 		return nil

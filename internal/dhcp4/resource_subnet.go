@@ -11,11 +11,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-nettypes/iptypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -82,11 +84,17 @@ func (r *SubnetResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"interface": schema.StringAttribute{
 				Description: "Name of the interface the subnet is directly reachable on. The interface must exist on the server.",
 				Optional:    true,
+				// Kea drops an empty value.
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 			},
 			"relay": schema.SetAttribute{
 				Description: "Addresses of relay agents that forward requests for this subnet (`relay.ip-addresses`).",
 				Optional:    true,
+				Computed:    true,
 				ElementType: iptypes.IPv4AddressType{},
+				Default:     setdefault.StaticValue(types.SetValueMust(iptypes.IPv4AddressType{}, []attr.Value{})),
 			},
 
 			"next_server": schema.StringAttribute{
@@ -97,10 +105,18 @@ func (r *SubnetResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"server_hostname": schema.StringAttribute{
 				Description: "Server hostname for network booting (`sname` field in DHCP packet).",
 				Optional:    true,
+				// Kea drops an empty value.
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 			},
 			"boot_file_name": schema.StringAttribute{
 				Description: "Boot file name for network booting (`file` field in DHCP packet).",
 				Optional:    true,
+				// Kea drops an empty value.
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 			},
 
 			"valid_lifetime": schema.Int64Attribute{

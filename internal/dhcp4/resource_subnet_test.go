@@ -27,7 +27,7 @@ func TestAccSubnet_basic(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "subnet", "10.67.10.0/24"),
 					resource.TestCheckResourceAttrSet(resourceName, "valid_lifetime"),
 					resource.TestCheckNoResourceAttr(resourceName, "pools.#"),
-					resource.TestCheckNoResourceAttr(resourceName, "relay"),
+					resource.TestCheckResourceAttr(resourceName, "relay.#", "0"),
 					resource.TestCheckNoResourceAttr(resourceName, "shared_network_name"),
 				),
 				PostApplyFunc: testAccCheckSubnetExists(t, 100),
@@ -167,6 +167,62 @@ func TestAccSubnet_full(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestAccSubnet_nextServerZero(t *testing.T) {
+	resourceName := "kea_dhcp4_subnet.test"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSubnetConfig_withBlocks(117, "10.67.20.0/24", `
+  next_server = "0.0.0.0"
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "next_server", "0.0.0.0"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccSubnet_explicitEmptyValues(t *testing.T) {
+	resourceName := "kea_dhcp4_subnet.test"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSubnetConfig_withBlocks(118, "10.67.21.0/24", `
+  relay                  = []
+  ddns_generated_prefix  = ""
+  ddns_qualifying_suffix = ""
+`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "relay.#", "0"),
+					resource.TestCheckResourceAttr(resourceName, "ddns_generated_prefix", ""),
+					resource.TestCheckResourceAttr(resourceName, "ddns_qualifying_suffix", ""),
+				),
+			},
+		},
+	})
+}
+
+func TestAccSubnet_emptyStringsRejected(t *testing.T) {
+	for _, attribute := range []string{"interface", "server_hostname", "boot_file_name"} {
+		t.Run(attribute, func(t *testing.T) {
+			resource.Test(t, resource.TestCase{
+				ProtoV6ProviderFactories: acctest.ProtoV6ProviderFactories,
+				Steps: []resource.TestStep{
+					{
+						Config:      testAccSubnetConfig_withBlocks(119, "10.67.22.0/24", fmt.Sprintf("  %s = \"\"\n", attribute)),
+						ExpectError: regexp.MustCompile("Invalid Attribute Value Length"),
+					},
+				},
+			})
+		})
+	}
 }
 
 func TestAccSubnet_update(t *testing.T) {

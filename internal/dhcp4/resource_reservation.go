@@ -275,10 +275,12 @@ func (r *ReservationResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	if err := r.client.AddReservation(ctx, kea.OperationTargetDatabase, reservation); err != nil {
-		resp.Diagnostics.AddError("Error Adding Reservation", err.Error())
+	writeErr := r.client.AddReservation(ctx, kea.OperationTargetDatabase, reservation)
+	if !applied(writeErr) {
+		resp.Diagnostics.AddError("Error Adding Reservation", writeErr.Error())
 		return
 	}
+	defer addConfigWriteError(&resp.Diagnostics, writeErr)
 
 	created, err := r.client.GetReservation(ctx, kea.OperationTargetDatabase, data.BuildQuery())
 	if err != nil {
@@ -337,10 +339,12 @@ func (r *ReservationResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	if err := r.client.UpdateReservation(ctx, kea.OperationTargetDatabase, reservation); err != nil {
-		resp.Diagnostics.AddError("Error Updating Reservation", err.Error())
+	writeErr := r.client.UpdateReservation(ctx, kea.OperationTargetDatabase, reservation)
+	if !applied(writeErr) {
+		resp.Diagnostics.AddError("Error Updating Reservation", writeErr.Error())
 		return
 	}
+	defer addConfigWriteError(&resp.Diagnostics, writeErr)
 
 	updated, err := r.client.GetReservation(ctx, kea.OperationTargetDatabase, data.BuildQuery())
 	if err != nil {
@@ -366,7 +370,7 @@ func (r *ReservationResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	if err := r.client.DeleteReservation(ctx, kea.OperationTargetDatabase, data.BuildQuery()); err != nil {
-		resp.Diagnostics.AddError("Error Deleting Reservation", err.Error())
+		addDeleteError(&resp.Diagnostics, "Error Deleting Reservation", err)
 	}
 }
 

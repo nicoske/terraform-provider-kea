@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/wfdewith/terraform-provider-kea/kea"
+	"github.com/wfdewith/terraform-provider-kea/kea/keaquery"
 )
 
 func (c *Client) GetSubnets(ctx context.Context, target kea.OperationTarget) ([]Subnet, error) {
@@ -20,4 +21,38 @@ func (c *Client) GetSubnets(ctx context.Context, target kea.OperationTarget) ([]
 	}
 
 	return result.Subnets, nil
+}
+
+func (c *Client) GetSubnet(ctx context.Context, query keaquery.SubnetQuery) (*Subnet, error) {
+	result, err := kea.ExecWithResponse[struct {
+		Subnet4 []Subnet `json:"subnet4"`
+	}](ctx, c.transport, "subnet4-get", query)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if result == nil || len(result.Subnet4) == 0 {
+		return nil, nil
+	}
+
+	return &result.Subnet4[0], nil
+}
+
+func (c *Client) AddSubnet(ctx context.Context, subnet Subnet) error {
+	return c.exec(ctx, "subnet added", "subnet4-add", struct {
+		Subnet4 []Subnet `json:"subnet4"`
+	}{[]Subnet{subnet}})
+}
+
+func (c *Client) UpdateSubnet(ctx context.Context, subnet Subnet) error {
+	return c.exec(ctx, "subnet updated", "subnet4-update", struct {
+		Subnet4 []Subnet `json:"subnet4"`
+	}{[]Subnet{subnet}})
+}
+
+func (c *Client) DeleteSubnet(ctx context.Context, id uint32) error {
+	return c.exec(ctx, "subnet deleted", "subnet4-del", struct {
+		ID uint32 `json:"id"`
+	}{id})
 }

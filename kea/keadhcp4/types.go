@@ -9,10 +9,56 @@ import (
 )
 
 type Subnet struct {
-	ID     uint32 `json:"id"`
-	Subnet string `json:"subnet"`
+	ID     uint32       `json:"id"`
+	Subnet netip.Prefix `json:"subnet"`
 
-	SharedNetworkName string `json:"shared-network-name,omitempty"`
+	SharedNetworkName *string `json:"shared-network-name,omitempty"`
+
+	Pools      []Pool       `json:"pools,omitempty"`
+	OptionData []OptionData `json:"option-data,omitempty"`
+
+	ClientClasses             []string `json:"client-classes,omitempty"`
+	EvaluateAdditionalClasses []string `json:"evaluate-additional-classes,omitempty"`
+
+	Interface *string `json:"interface,omitempty"`
+	Relay     *Relay  `json:"relay,omitempty"`
+
+	NextServer     *netip.Addr `json:"next-server,omitempty"`
+	ServerHostname *string     `json:"server-hostname,omitempty"`
+	BootFileName   *string     `json:"boot-file-name,omitempty"`
+
+	ValidLifetime    *uint32 `json:"valid-lifetime,omitempty"`
+	MinValidLifetime *uint32 `json:"min-valid-lifetime,omitempty"`
+	MaxValidLifetime *uint32 `json:"max-valid-lifetime,omitempty"`
+	RenewTimer       *uint32 `json:"renew-timer,omitempty"`
+	RebindTimer      *uint32 `json:"rebind-timer,omitempty"`
+
+	ReservationsGlobal    *bool `json:"reservations-global,omitempty"`
+	ReservationsInSubnet  *bool `json:"reservations-in-subnet,omitempty"`
+	ReservationsOutOfPool *bool `json:"reservations-out-of-pool,omitempty"`
+
+	DDNSSendUpdates          *bool   `json:"ddns-send-updates,omitempty"`
+	DDNSOverrideNoUpdate     *bool   `json:"ddns-override-no-update,omitempty"`
+	DDNSOverrideClientUpdate *bool   `json:"ddns-override-client-update,omitempty"`
+	DDNSReplaceClientName    *string `json:"ddns-replace-client-name,omitempty"`
+	DDNSGeneratedPrefix      *string `json:"ddns-generated-prefix,omitempty"`
+	DDNSQualifyingSuffix     *string `json:"ddns-qualifying-suffix,omitempty"`
+	DDNSUpdateOnRenew        *bool   `json:"ddns-update-on-renew,omitempty"`
+	DDNSTTL                  *uint32 `json:"ddns-ttl,omitempty"`
+
+	UserContext *json.RawMessage `json:"user-context,omitempty"`
+}
+
+type Pool struct {
+	Pool string `json:"pool"`
+
+	ClientClasses             []string     `json:"client-classes,omitempty"`
+	EvaluateAdditionalClasses []string     `json:"evaluate-additional-classes,omitempty"`
+	OptionData                []OptionData `json:"option-data,omitempty"`
+}
+
+type Relay struct {
+	IPAddresses []netip.Addr `json:"ip-addresses"`
 }
 
 type Reservation struct {
@@ -167,6 +213,41 @@ func (d *OptionDef) UnmarshalJSON(data []byte) error {
 	// rather than omitting them from the response.
 	d.RecordTypes = nilIfEmpty(d.RecordTypes)
 	d.Encapsulate = nilIfEmpty(d.Encapsulate)
+
+	return nil
+}
+
+func (s *Subnet) UnmarshalJSON(data []byte) error {
+	type Alias Subnet
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(s),
+	}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// The Kea API returns these fields as empty strings when not set,
+	// rather than omitting them from the response.
+	s.SharedNetworkName = nilIfEmpty(s.SharedNetworkName)
+	s.Interface = nilIfEmpty(s.Interface)
+	s.ServerHostname = nilIfEmpty(s.ServerHostname)
+	s.BootFileName = nilIfEmpty(s.BootFileName)
+	s.DDNSReplaceClientName = nilIfEmpty(s.DDNSReplaceClientName)
+	s.DDNSGeneratedPrefix = nilIfEmpty(s.DDNSGeneratedPrefix)
+	s.DDNSQualifyingSuffix = nilIfEmpty(s.DDNSQualifyingSuffix)
+
+	// Kea treats a next-server of "0.0.0.0" as unset.
+	if s.NextServer != nil && (!s.NextServer.IsValid() || s.NextServer.IsUnspecified()) {
+		s.NextServer = nil
+	}
+
+	// The Kea API always returns relay, with an empty address list when not set.
+	if s.Relay != nil && len(s.Relay.IPAddresses) == 0 {
+		s.Relay = nil
+	}
 
 	return nil
 }
